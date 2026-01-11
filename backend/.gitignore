@@ -1,0 +1,316 @@
+# 프로젝트 생성 시 자동 생성되는 도움말 파일
+HELP.md
+
+### Gradle ###
+# Gradle 빌드 디렉토리
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Gradle 캐시
+.gradle/
+gradle-app.setting
+
+### Java ###
+# 컴파일된 클래스 파일
+*.class
+
+# 로그 파일
+*.log
+
+# 패키지 파일
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# JVM 크래시 로그
+hs_err_pid*
+replay_pid*
+
+### Spring Boot ###
+# Spring Boot 빌드 정보
+.springBeans
+spring-boot-starter-parent/
+
+### STS (Spring Tool Suite) ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+# IntelliJ IDEA 워크스페이스 파일
+.idea_modules/
+*.iml
+modules.xml
+.idea/misc.xml
+*.ipr
+
+# IntelliJ IDEA 사용자 설정
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries
+.idea/shelf
+
+# IntelliJ IDEA Rider
+.idea/.idea.*.dir/config/applicationhost.config
+
+### Eclipse ###
+.metadata
+.classpath
+.project
+.settings/
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# Eclipse 외부 도구 빌더
+.externalToolBuilders/
+
+# Eclipse CDT
+.cproject
+
+# Eclipse JDT
+.buildpath
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+nbactions.xml
+nb-configuration.xml
+
+### VS Code ###
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# VS Code History
+.history/
+
+### macOS ###
+# macOS 시스템 파일
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS 썸네일
+._*
+
+# macOS Trash
+.Trashes
+
+# macOS Spotlight
+.Spotlight-V100
+
+### Windows ###
+# Windows 썸네일 캐시
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# Windows 폴더 설정
+[Dd]esktop.ini
+
+# Windows 휴지통
+$RECYCLE.BIN/
+
+# Windows 바로가기
+*.lnk
+
+### Linux ###
+# Linux 임시 파일
+*~
+
+# Linux 스왑 파일
+.nfs*
+
+### 환경 설정 파일 ###
+# application 설정 파일 (민감 정보 포함)
+# 주의: 로컬 개발용 설정은 Git에 포함시키되, 프로덕션 설정은 제외
+application-local.yml
+application-dev.yml
+application-prod.yml
+application-secret.yml
+
+# 환경 변수 파일
+.env
+.env.local
+.env.*.local
+
+### 데이터베이스 ###
+# H2 데이터베이스 파일
+*.db
+*.trace.db
+*.lock.db
+*.mv.db
+*.h2.db
+
+### 로그 파일 ###
+# 애플리케이션 로그
+logs/
+*.log
+*.log.*
+log/
+
+# 서버 로그
+server.log
+application.log
+
+### 임시 파일 ###
+# 임시 디렉토리
+tmp/
+temp/
+*.tmp
+*.temp
+
+### 백업 파일 ###
+*.bak
+*.backup
+*.old
+*~
+
+### 테스트 커버리지 ###
+# JaCoCo
+target/
+jacoco.exec
+*.exec
+
+# Coverage 리포트
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+*.cover
+
+### 빌드 도구 ###
+# Maven (혹시 나중에 Maven으로 전환할 경우)
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+### 문서 ###
+# 생성된 문서
+docs/generated/
+api-docs/
+
+### 캐시 ###
+# npm 캐시 (프론트엔드 통합 시)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### AWS ###
+# AWS 자격증명 (절대 커밋하면 안 됨)
+.aws/
+aws-exports.js
+
+### S3 ###
+# S3 임시 파일
+*.s3-upload
+
+### Docker ###
+# Docker 관련
+.dockerignore
+docker-compose.override.yml
+
+### 보안 ###
+# 개인 키 파일
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+
+# SSL 인증서
+*.crt
+*.cer
+
+# 비밀번호 파일
+secrets/
+*.secret
+
+### 프로젝트 특화 ###
+# 업로드된 파일 (로컬 테스트용)
+uploads/
+files/
+storage/
+
+# 생성된 AI 분석 결과 (로컬 테스트용)
+results/
+outputs/
+
+# ML 모델 파일 (대용량이므로 별도 관리)
+*.h5
+*.pkl
+*.pth
+*.pt
+*.onnx
+models/
+
+# 데이터셋 (대용량)
+datasets/
+data/
+*.csv
+*.json
+*.xml
+!src/main/resources/data/*.json
+!src/test/resources/**/*.json
+
+### 기타 ###
+# 사용자 정의 설정
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+
+# 메모 파일
+TODO.md
+NOTES.md

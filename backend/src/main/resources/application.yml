@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: backend
+
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+mybatis:
+  mapper-locations: classpath:mappers/**/*.xml
+  type-aliases-package: fakehunters.backend.*.domain
+  configuration:
+    map-underscore-to-camel-case: true
