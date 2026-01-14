@@ -22,7 +22,7 @@ import java.util.Map;
 public class AudioService {
 
     private final AudioAnalysisResultMapper mapper;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public AnalyzeResponse insertTest(AnalyzeRequest req) {
@@ -69,10 +69,14 @@ public class AudioService {
                 );
 
         // 4️⃣ INSERT → id 반환 (PostgreSQL RETURNING)
-        long id = mapper.insert(param);
-
+        Long id = mapper.insert(param);
+        if (id == null || id <= 0) {
+            throw new IllegalStateException("Insert returned invalid id=" + id);
+        }
         // 5️⃣ 방금 저장한 row 조회
         AudioAnalysisResult saved = mapper.findById(id);
+
+
 
         // 6️⃣ JsonNode → EvidenceItem 변환 (지금은 단순 더미)
         List<EvidenceItem> evidence = List.of(
