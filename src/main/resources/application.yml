@@ -15,8 +15,8 @@ spring:
 
 mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
-  type-aliases-package: fakenhunters.backend
-  type-handlers-package: fakenhunters.backend.global.mybatis
+  type-aliases-package: fakehunters.backend
+  type-handlers-package: fakehunters.backend.global.mybatis
   configuration:
     map-underscore-to-camel-case: true
     jdbc-type-for-null: NULL

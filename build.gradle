@@ -33,13 +33,15 @@ dependencies {
 
 	// PostgreSQL
 	// runtimeOnly 'org.postgresql:postgresql'
-	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
 	runtimeOnly 'org.postgresql:postgresql:42.7.4'
 
 	// H2
-	runtimeOnly 'com.h2database:h2'
-
+//	runtimeOnly 'com.h2database:h2'
+	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
+
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
