@@ -3,10 +3,10 @@ spring:
     name: backend
 
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:testdb
-    username: sa
-    password:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://pos.cdso6eyswiwz.ap-northeast-2.rds.amazonaws.com:5432/fake_hunters
+    username: pos   # ⚠️ 실제 RDS 유저명으로 교체
+    password: pospos2026^P       # ⚠️ 실제 비밀번호
 
   h2:
     console:
