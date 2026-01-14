@@ -162,6 +162,7 @@ $RECYCLE.BIN/
 ### 환경 설정 파일 ###
 # application 설정 파일 (민감 정보 포함)
 # 주의: 로컬 개발용 설정은 Git에 포함시키되, 프로덕션 설정은 제외
+application.yml
 application-local.yml
 application-dev.yml
 application-prod.yml
