@@ -14,7 +14,10 @@ spring:
       path: /h2-console
 
 mybatis:
-  mapper-locations: classpath:mappers/**/*.xml
-  type-aliases-package: fakehunters.backend.*.domain
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: fakenhunters.backend
+  type-handlers-package: fakenhunters.backend.global.mybatis
   configuration:
     map-underscore-to-camel-case: true
+    jdbc-type-for-null: NULL
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
