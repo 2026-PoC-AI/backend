@@ -14,7 +14,7 @@ spring:
       path: /h2-console
 
 mybatis:
-  mapper-locations: classpath*:mapper/**/*.xml
+  mapper-locations: classpath:/mapper/**/*.xml
   type-aliases-package: fakehunters.backend
   type-handlers-package: fakehunters.backend.global.mybatis
   configuration:
