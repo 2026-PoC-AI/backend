@@ -32,6 +32,7 @@ dependencies {
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
+<<<<<<< HEAD
 	// PostgreSQL
 	// runtimeOnly 'org.postgresql:postgresql'
 	runtimeOnly 'org.postgresql:postgresql:42.7.4'
@@ -43,6 +44,16 @@ dependencies {
 
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
+=======
+
+	// PostgreSQL
+	// runtimeOnly 'org.postgresql:postgresql'
+
+	// H2
+	runtimeOnly 'com.h2database:h2'
+
+	annotationProcessor 'org.projectlombok:lombok'
+>>>>>>> 290bb4c730e9628e2e572edd83c4379e6a03e06f
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
