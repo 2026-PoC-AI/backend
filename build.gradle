@@ -31,9 +31,10 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
-
 	// PostgreSQL
 	// runtimeOnly 'org.postgresql:postgresql'
+	implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
+	runtimeOnly 'org.postgresql:postgresql:42.7.4'
 
 	// H2
 	runtimeOnly 'com.h2database:h2'
