@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface AudioAnalysisResultMapper {
 
-    long insert(AudioAnalysisResultInsertParam param);
+    Long insert(AudioAnalysisResultInsertParam param);
 
     AudioAnalysisResult findById(@Param("id") long id);
 }
