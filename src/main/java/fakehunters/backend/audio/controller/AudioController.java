@@ -6,7 +6,10 @@ import fakehunters.backend.audio.service.AudioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
@@ -15,13 +18,7 @@ public class AudioController {
 
     private final AudioService audioService;
 
-//    @PostMapping("/insert-test")
-//    public ResponseEntity<AnalyzeResponse> insertTest(
-//            @Valid @RequestBody AnalyzeRequest request
-//    ) {
-//        return ResponseEntity.ok(audioService.insertTest(request));
-//    }
-
+    // POST /api/v1/audio/analyze
     @PostMapping("/analyze")
     public ResponseEntity<AnalyzeResponse> analyze(
             @Valid @RequestBody AnalyzeRequest request
