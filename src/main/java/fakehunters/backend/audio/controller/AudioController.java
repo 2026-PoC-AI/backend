@@ -15,10 +15,17 @@ public class AudioController {
 
     private final AudioService audioService;
 
-    @PostMapping("/insert-test")
-    public ResponseEntity<AnalyzeResponse> insertTest(
+//    @PostMapping("/insert-test")
+//    public ResponseEntity<AnalyzeResponse> insertTest(
+//            @Valid @RequestBody AnalyzeRequest request
+//    ) {
+//        return ResponseEntity.ok(audioService.insertTest(request));
+//    }
+
+    @PostMapping("/analyze")
+    public ResponseEntity<AnalyzeResponse> analyze(
             @Valid @RequestBody AnalyzeRequest request
     ) {
-        return ResponseEntity.ok(audioService.insertTest(request));
+        return ResponseEntity.ok(audioService.analyze(request));
     }
 }
