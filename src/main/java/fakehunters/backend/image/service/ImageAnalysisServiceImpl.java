@@ -7,7 +7,9 @@ import fakehunters.backend.image.domain.ImageAnalysisResult;
 import fakehunters.backend.image.dto.request.DeepfakeResultRequest;
 import fakehunters.backend.image.dto.request.ImageAnalyzeRequest;
 import fakehunters.backend.image.dto.response.DeepfakeResultResponse;
+import fakehunters.backend.image.dto.response.ImageAnalysisQueryResponse;
 import fakehunters.backend.image.dto.response.ImageAnalyzeResponse;
+import fakehunters.backend.image.dto.response.ImageResultDetailResponse;
 import fakehunters.backend.image.mapper.ImageAnalysisInputMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisJobMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisResultMapper;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -101,6 +104,48 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
         jobMapper.updateStatus(job.getJobId(), "COMPLETED");
 
         return new DeepfakeResultResponse("SAVED");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ImageAnalysisQueryResponse getAnalysisResult(UUID jobUuid) {
+
+        ImageAnalysisJob job = jobMapper.findByJobUuid(jobUuid);
+        if (job == null) {
+            throw new IllegalArgumentException("Image analysis job not found");
+        }
+
+        ImageAnalysisInput input =
+                inputMapper.findByJobId(job.getJobId());
+
+        List<ImageAnalysisResult> results =
+                resultMapper.findByJobId(job.getJobId());
+
+        return new ImageAnalysisQueryResponse(
+                new ImageAnalysisQueryResponse.JobInfo(
+                        job.getJobUuid(),
+                        job.getJobStatus(),
+                        job.getCreatedAt()
+                ),
+                new ImageAnalysisQueryResponse.InputInfo(
+                        input.getInputFilename(),
+                        input.getInputS3Key(),
+                        input.getInputMimeType(),
+                        input.getInputFilesize()
+                ),
+                results.stream()
+                        .map(r -> new ImageResultDetailResponse(
+                                r.getResultTaskType(),
+                                r.getResultLabel(),
+                                r.getResultConfidence(),
+                                r.getResultRiskScore(),
+                                r.getResultRiskLevel(),
+                                r.getResultInterpretation(),
+                                r.getResultEvidence(),
+                                r.getResultWarnings()
+                        ))
+                        .toList()
+        );
     }
 
 }
