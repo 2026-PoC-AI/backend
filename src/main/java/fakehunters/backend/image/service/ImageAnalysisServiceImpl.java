@@ -3,12 +3,17 @@ package fakehunters.backend.image.service;
 
 import fakehunters.backend.image.domain.ImageAnalysisInput;
 import fakehunters.backend.image.domain.ImageAnalysisJob;
+import fakehunters.backend.image.domain.ImageAnalysisResult;
+import fakehunters.backend.image.dto.request.DeepfakeResultRequest;
 import fakehunters.backend.image.dto.request.ImageAnalyzeRequest;
+import fakehunters.backend.image.dto.response.DeepfakeResultResponse;
 import fakehunters.backend.image.dto.response.ImageAnalyzeResponse;
 import fakehunters.backend.image.mapper.ImageAnalysisInputMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisJobMapper;
+import fakehunters.backend.image.mapper.ImageAnalysisResultMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -17,8 +22,11 @@ import java.util.UUID;
 public class ImageAnalysisServiceImpl implements ImageAnalysisService {
     private final ImageAnalysisJobMapper jobMapper;
     private final ImageAnalysisInputMapper inputMapper;
+    private final ImageAnalysisResultMapper resultMapper;
 
+    // 이미지 분석 Job 생성
     @Override
+    @Transactional
     public ImageAnalyzeResponse createAnalysis(ImageAnalyzeRequest request) {
 
         // 분석 Job 생성
@@ -41,7 +49,58 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
 
         inputMapper.insert(input);
 
-        // 외부로 노출되는 ID는 UUID만 사용
+        // 외부로는 UUID만 반환
         return new ImageAnalyzeResponse(job.getJobUuid());
     }
+
+    //딥페이크 분석 결과 저장
+    @Override
+    @Transactional
+    public DeepfakeResultResponse saveDeepfakeResult(DeepfakeResultRequest request) {
+
+        ImageAnalysisJob job =
+                jobMapper.findByJobUuid(request.getJobUuid());
+
+        if (job == null) {
+            throw new IllegalArgumentException("Image analysis job not found");
+        }
+
+        // Risk Score 계산
+        int riskScore = (int) Math.round(request.getConfidence() * 100);
+
+        // Risk Level 계산
+        String riskLevel =
+                riskScore >= 70 ? "HIGH" :
+                        riskScore >= 40 ? "MEDIUM" : "LOW";
+
+        // Label 결정
+        String label = riskScore >= 50 ? "FAKE" : "REAL";
+
+        // Interpretation
+        String interpretation =
+                "This image shows a " + riskLevel +
+                        " probability of being AI-generated.";
+
+        ImageAnalysisResult result = ImageAnalysisResult.builder()
+                .resultUuid(UUID.randomUUID())
+                .jobId(job.getJobId())
+                .resultTaskType("deepfake_image")
+                .resultLabel(label)
+                .resultConfidence(request.getConfidence())
+                .resultRiskScore(riskScore)
+                .resultRiskLevel(riskLevel)
+                .resultInterpretation(interpretation)
+                .resultEvidence(request.getEvidence())
+                .resultWarnings(null)
+                .resultJson(request.getRawResult())
+                .build();
+
+        resultMapper.insert(result);
+
+        // Job 상태 업데이트
+        jobMapper.updateStatus(job.getJobId(), "COMPLETED");
+
+        return new DeepfakeResultResponse("SAVED");
+    }
+
 }
