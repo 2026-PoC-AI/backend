@@ -40,7 +40,7 @@ public class VideoService {
 
         // 파일 형식 검증
         String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("mappers/video/")) {
+        if (contentType == null || !contentType.startsWith("mapper/video/")) {
             throw new CustomBusinessException(VideoErrorCode.INVALID_FILE_FORMAT);
         }
 

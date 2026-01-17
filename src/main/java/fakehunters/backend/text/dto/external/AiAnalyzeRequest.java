@@ -1,4 +1,6 @@
 package fakehunters.backend.text.dto.external;
 
-public class AiAnalyzeRequest {
-}
+public record AiAnalyzeRequest(
+        String analysisId,
+        String inputText
+) {}
