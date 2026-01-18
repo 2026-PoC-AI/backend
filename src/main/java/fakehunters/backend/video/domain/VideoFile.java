@@ -8,7 +8,8 @@ import java.time.LocalDateTime;
 @Getter
 @Builder
 public class VideoFile {
-    private String fileId;
+    private Long fileId;
+    private Long analysisId;      // FK
     private String originalFilename;
     private String storedFilename;
     private String filePath;
@@ -18,5 +19,4 @@ public class VideoFile {
     private String format;
     private BigDecimal fps;
     private LocalDateTime uploadedAt;
-    private String analysisId;      // FK
 }

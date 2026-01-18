@@ -9,7 +9,7 @@ import java.util.List;
 @Data
 @Builder
 public class VideoAnalysisResponse {
-    private String analysisId;           // 분석ID (PK)
+    private Long analysisId;           // 분석ID (PK)
     private String title;                // 제목
     private String status;               // 상태 (PENDING/PROCESSING/COMPLETED/FAILED)
     private LocalDateTime createdAt;         // 분석 요청 시각

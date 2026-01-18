@@ -21,7 +21,7 @@ public class FrameAnalysisService {
     private final FrameAnalysisMapper frameAnalysisMapper;
 
     @Transactional(readOnly = true)
-    public FrameAnalysisResponse getFrameAnalysis(String frameId) {
+    public FrameAnalysisResponse getFrameAnalysis(Long frameId) {
         FrameAnalysis frame = frameAnalysisMapper.findById(frameId);
         if (frame == null) {
             throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
@@ -31,21 +31,15 @@ public class FrameAnalysisService {
     }
 
     @Transactional(readOnly = true)
-    public List<FrameAnalysisResponse> getFrameAnalysesByResultId(String resultId) {
+    public List<FrameAnalysisResponse> getFrameAnalysesByResultId(Long resultId) { // String -> Long
         List<FrameAnalysis> frames = frameAnalysisMapper.findByResultId(resultId);
-
-        return frames.stream()
-                .map(this::convertToResponse)
-                .toList();
+        return frames.stream().map(this::convertToResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<FrameAnalysisResponse> getSuspiciousFrames(String resultId) {
+    public List<FrameAnalysisResponse> getSuspiciousFrames(Long resultId) { // String -> Long
         List<FrameAnalysis> frames = frameAnalysisMapper.findSuspiciousFramesByResultId(resultId);
-
-        return frames.stream()
-                .map(this::convertToResponse)
-                .toList();
+        return frames.stream().map(this::convertToResponse).toList();
     }
 
     private FrameAnalysisResponse convertToResponse(FrameAnalysis frame) {
@@ -55,7 +49,7 @@ public class FrameAnalysisService {
                 .timestampSeconds(frame.getTimestampSeconds())
                 .isDeepfake(frame.getIsDeepfake())
                 .confidenceScore(frame.getConfidenceScore())
-                .anomalyType(frame.getAnomalyType())
+                .anomalyType(frame.getAnomalyRegions())
                 .features(frame.getFeatures())
                 .build();
     }

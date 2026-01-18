@@ -18,29 +18,25 @@ public class AnalysisResultService {
     private final AnalysisResultMapper analysisResultMapper;
 
     @Transactional(readOnly = true)
-    public AnalysisResultResponse getAnalysisResult(String resultId) {
+    public AnalysisResultResponse getAnalysisResult(Long resultId) {
         AnalysisResult result = analysisResultMapper.findById(resultId);
-        if (result == null) {
-            throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
-        }
-
+        if (result == null) throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
         return convertToResponse(result);
     }
 
     @Transactional(readOnly = true)
-    public AnalysisResultResponse getAnalysisResultByAnalysisId(String analysisId) {
+    public AnalysisResultResponse getAnalysisResultByAnalysisId(Long analysisId) {
         AnalysisResult result = analysisResultMapper.findByAnalysisId(analysisId);
-        if (result == null) {
-            throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
-        }
-
+        if (result == null) throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
         return convertToResponse(result);
     }
 
     private AnalysisResultResponse convertToResponse(AnalysisResult result) {
         return AnalysisResultResponse.builder()
                 .resultId(result.getResultId())
-                .createdAt(result.getCreatedAt())
+                .analysisId(result.getAnalysisId())
+                // DTO의 createdAt 필드에 도메인의 analyzedAt 값을 넣어줍니다.
+                .createdAt(result.getAnalyzedAt())
                 .confidenceScore(result.getConfidenceScore())
                 .isDeepfake(result.getIsDeepfake())
                 .modelVersion(result.getModelVersion())

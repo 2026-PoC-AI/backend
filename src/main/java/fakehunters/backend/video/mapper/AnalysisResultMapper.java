@@ -7,6 +7,6 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface AnalysisResultMapper {
     void insert(AnalysisResult analysisResult);
-    AnalysisResult findById(@Param("resultId") String resultId);
-    AnalysisResult findByAnalysisId(@Param("analysisId") String analysisId);
+    AnalysisResult findById(@Param("resultId") Long resultId);
+    AnalysisResult findByAnalysisId(@Param("analysisId") Long analysisId);
 }

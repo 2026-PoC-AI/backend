@@ -9,7 +9,7 @@ import java.util.List;
 public interface FrameAnalysisMapper {
     void insert(FrameAnalysis frameAnalysis);
     void insertBatch(@Param("list") List<FrameAnalysis> frameAnalyses);
-    FrameAnalysis findById(@Param("frameId") String frameId);
-    List<FrameAnalysis> findByResultId(@Param("resultId") String resultId);
-    List<FrameAnalysis> findSuspiciousFramesByResultId(@Param("resultId") String resultId);
+    FrameAnalysis findById(@Param("frameId") Long frameId);
+    List<FrameAnalysis> findByResultId(@Param("resultId") Long resultId);
+    List<FrameAnalysis> findSuspiciousFramesByResultId(@Param("resultId") Long resultId);
 }

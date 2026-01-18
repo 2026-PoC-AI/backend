@@ -17,8 +17,11 @@ public class VideoFileService {
 
     private final VideoFileMapper videoFileMapper;
 
+    /**
+     * 파일 ID(PK)로 비디오 파일 정보 조회
+     */
     @Transactional(readOnly = true)
-    public VideoFileResponse getVideoFile(String fileId) {
+    public VideoFileResponse getVideoFile(Long fileId) { // String -> Long 변경
         VideoFile videoFile = videoFileMapper.findById(fileId);
         if (videoFile == null) {
             throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
@@ -27,8 +30,11 @@ public class VideoFileService {
         return convertToResponse(videoFile);
     }
 
+    /**
+     * 분석 작업 ID(FK)로 연결된 비디오 파일 정보 조회
+     */
     @Transactional(readOnly = true)
-    public VideoFileResponse getVideoFileByAnalysisId(String analysisId) {
+    public VideoFileResponse getVideoFileByAnalysisId(Long analysisId) { // String -> Long 변경
         VideoFile videoFile = videoFileMapper.findByAnalysisId(analysisId);
         if (videoFile == null) {
             throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
@@ -37,9 +43,13 @@ public class VideoFileService {
         return convertToResponse(videoFile);
     }
 
+    /**
+     * 도메인 객체를 응답 DTO로 변환
+     */
     private VideoFileResponse convertToResponse(VideoFile file) {
         return VideoFileResponse.builder()
                 .fileId(file.getFileId())
+                .analysisId(file.getAnalysisId()) // 연관된 분석 ID 포함
                 .originalFilename(file.getOriginalFilename())
                 .storedFilename(file.getStoredFilename())
                 .filePath(file.getFilePath())

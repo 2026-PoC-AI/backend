@@ -23,7 +23,6 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -44,51 +43,51 @@ public class VideoAnalysisService {
 
     private static final List<String> ALLOWED_FORMATS = Arrays.asList("mp4", "avi", "mov");
 
+    /**
+     * 비디오 분석 요청 처리
+     */
     @Transactional
     public Mono<VideoAnalysisResponse> analyzeVideo(MultipartFile file) {
-        // 파일 검증
         validateFile(file);
 
-        // 1. 분석 ID 생성
-        String analysisId = UUID.randomUUID().toString();
+        // 1. 분석 작업 생성 (DB에서 Long ID 발급)
+        VideoAnalysis videoAnalysis = VideoAnalysis.builder()
+                .title(file.getOriginalFilename())
+                .status("PENDING")
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        videoAnalysisMapper.insert(videoAnalysis);
+        Long analysisId = videoAnalysis.getAnalysisId(); // 생성된 PK 확보
 
         // 2. 파일 저장
         String storedFilename;
         try {
-            storedFilename = saveFile(file, analysisId);
+            storedFilename = saveFile(file, analysisId.toString());
         } catch (IOException e) {
             log.error("파일 저장 실패", e);
             throw new CustomSystemException(VideoErrorCode.UPLOAD_ERROR);
         }
 
-        // 3. DB에 분석 작업 생성 (PENDING 상태)
-        VideoAnalysis videoAnalysis = VideoAnalysis.builder()
-                .analysisId(analysisId)
-                .title(file.getOriginalFilename())
-                .status("PENDING")
-                .createdAt(LocalDateTime.now())
-                .build();
-        videoAnalysisMapper.insert(videoAnalysis);
-
-        // 4. DB에 파일 정보 저장
+        // 3. DB에 파일 정보 저장
         VideoFile videoFile = VideoFile.builder()
-                .fileId(UUID.randomUUID().toString())
+                .analysisId(analysisId)
                 .originalFilename(file.getOriginalFilename())
                 .storedFilename(storedFilename)
                 .filePath(uploadPath + "/" + storedFilename)
                 .fileSize(file.getSize())
                 .format(getFileExtension(file.getOriginalFilename()))
                 .uploadedAt(LocalDateTime.now())
-                .analysisId(analysisId)
                 .build();
         videoFileMapper.insert(videoFile);
 
-        // 5. 상태를 PROCESSING으로 변경
+        // 4. 상태를 PROCESSING으로 변경
         videoAnalysisMapper.updateStatus(analysisId, "PROCESSING");
 
-        // 6. FastAPI 호출
+        // 5. ★ FastAPI 호출 시 analysis_id 전달 ★
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("file", file.getResource());
+        builder.part("analysis_id", analysisId); // FastAPI가 이 ID를 기반으로 응답하게 함
 
         return aiServiceWebClient.post()
                 .uri("/api/v1/video/analyze")
@@ -96,22 +95,22 @@ public class VideoAnalysisService {
                 .retrieve()
                 .bodyToMono(VideoAnalysisResponse.class)
                 .doOnNext(response -> {
-                    // 7. FastAPI 결과를 DB에 저장
-                    saveAnalysisResult(analysisId, response);
-
-                    // 8. 상태를 COMPLETED로 변경
+                    // response.getAnalysisId()는 이제 UUID가 아닌 우리가 보낸 Long ID가 들어있음
+                    saveAnalysisResultInternal(analysisId, response);
                     videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
                     videoAnalysisMapper.updateCompletedAt(analysisId);
                 })
                 .doOnError(e -> {
-                    log.error("FastAPI 호출 실패", e);
+                    log.error("AI 서비스 호출 실패", e);
                     videoAnalysisMapper.updateStatus(analysisId, "FAILED");
                 });
     }
 
+    /**
+     * 분석 결과 조회 (Long ID 사용)
+     */
     @Transactional(readOnly = true)
-    public Mono<VideoAnalysisResponse> getAnalysisResult(String analysisId) {
-        // DB에서 전체 분석 결과 조회
+    public Mono<VideoAnalysisResponse> getAnalysisResult(Long analysisId) {
         VideoAnalysis analysis = videoAnalysisMapper.findById(analysisId);
         if (analysis == null) {
             throw new CustomSystemException(VideoErrorCode.NOT_FOUND);
@@ -121,22 +120,18 @@ public class VideoAnalysisService {
         AnalysisResult result = analysisResultMapper.findByAnalysisId(analysisId);
 
         if (result == null) {
-            // 아직 분석이 완료되지 않은 경우 (PENDING 또는 PROCESSING 상태)
-            VideoAnalysisResponse response = VideoAnalysisResponse.builder()
+            return Mono.just(VideoAnalysisResponse.builder()
                     .analysisId(analysis.getAnalysisId())
                     .title(analysis.getTitle())
                     .status(analysis.getStatus())
                     .createdAt(analysis.getCreatedAt())
                     .videoFile(convertToFileResponse(file))
-                    .build();
-            return Mono.just(response);
+                    .build());
         }
 
-        // FrameAnalysis 조회
         List<FrameAnalysis> frames = frameAnalysisMapper.findByResultId(result.getResultId());
 
-        // Response 조합
-        VideoAnalysisResponse response = VideoAnalysisResponse.builder()
+        return Mono.just(VideoAnalysisResponse.builder()
                 .analysisId(analysis.getAnalysisId())
                 .title(analysis.getTitle())
                 .status(analysis.getStatus())
@@ -144,79 +139,40 @@ public class VideoAnalysisService {
                 .completedAt(analysis.getCompletedAt())
                 .videoFile(convertToFileResponse(file))
                 .analysisResult(convertToResultResponse(result))
-                .frameAnalyses(frames.stream()
-                        .map(this::convertToFrameResponse)
-                        .toList())
-                .build();
-
-        return Mono.just(response);
+                .frameAnalyses(frames.stream().map(this::convertToFrameResponse).toList())
+                .build());
     }
 
-    private void validateFile(MultipartFile file) {
-        // 파일 필수 체크
-        if (file == null || file.isEmpty()) {
-            throw new CustomSystemException(VideoErrorCode.FILE_REQUIRED);
-        }
-
-        // 파일 크기 체크
-        if (file.getSize() > maxFileSize) {
-            throw new CustomSystemException(VideoErrorCode.FILE_SIZE_EXCEEDED);
-        }
-
-        // 파일 형식 체크
-        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
-        if (!ALLOWED_FORMATS.contains(extension)) {
-            throw new CustomSystemException(VideoErrorCode.INVALID_FILE_FORMAT);
-        }
-    }
-
-    private String saveFile(MultipartFile file, String analysisId) throws IOException {
-        Path uploadDir = Paths.get(uploadPath);
-        if (!Files.exists(uploadDir)) {
-            Files.createDirectories(uploadDir);
-        }
-
-        String extension = getFileExtension(file.getOriginalFilename());
-        String storedFilename = analysisId + "_" + System.currentTimeMillis() + "." + extension;
-        Path filePath = uploadDir.resolve(storedFilename);
-
-        Files.copy(file.getInputStream(), filePath);
-        return storedFilename;
-    }
-
-    private String getFileExtension(String filename) {
-        return filename.substring(filename.lastIndexOf(".") + 1);
-    }
-
-    @Transactional
-    private void saveAnalysisResult(String analysisId, VideoAnalysisResponse response) {
+    /**
+     * 내부 결과 저장 로직 (ID 체인 연결)
+     */
+    private void saveAnalysisResultInternal(Long analysisId, VideoAnalysisResponse response) {
         try {
-            // AnalysisResult 저장
+            // 1. Result 저장
             AnalysisResult result = AnalysisResult.builder()
-                    .resultId(UUID.randomUUID().toString())
                     .analysisId(analysisId)
-                    .createdAt(LocalDateTime.now())
-                    .confidenceScore(response.getAnalysisResult().getConfidenceScore())
                     .isDeepfake(response.getAnalysisResult().getIsDeepfake())
+                    .confidenceScore(response.getAnalysisResult().getConfidenceScore())
                     .modelVersion(response.getAnalysisResult().getModelVersion())
                     .processingTimeMs(response.getAnalysisResult().getProcessingTimeMs())
                     .detectedTechniques(response.getAnalysisResult().getDetectedTechniques())
                     .summary(response.getAnalysisResult().getSummary())
                     .analyzedAt(LocalDateTime.now())
                     .build();
-            analysisResultMapper.insert(result);
 
-            // FrameAnalysis 배치 저장
+            analysisResultMapper.insert(result);
+            Long resultId = result.getResultId();
+
+            // 2. Frame 상세 배치 저장
             if (response.getFrameAnalyses() != null && !response.getFrameAnalyses().isEmpty()) {
                 List<FrameAnalysis> frameAnalyses = response.getFrameAnalyses().stream()
                         .map(frame -> FrameAnalysis.builder()
-                                .frameId(UUID.randomUUID().toString())
-                                .resultId(result.getResultId())
+                                .resultId(resultId)
                                 .frameNumber(frame.getFrameNumber())
                                 .timestampSeconds(frame.getTimestampSeconds())
                                 .isDeepfake(frame.getIsDeepfake())
                                 .confidenceScore(frame.getConfidenceScore())
-                                .anomalyType(frame.getAnomalyType())
+                                .anomalyRegions(frame.getAnomalyType()) // DTO의 anomalyType을 도메인의 anomalyRegions에 매핑
                                 .features(frame.getFeatures())
                                 .build())
                         .toList();
@@ -224,12 +180,37 @@ public class VideoAnalysisService {
                 frameAnalysisMapper.insertBatch(frameAnalyses);
             }
         } catch (Exception e) {
-            log.error("분석 결과 저장 실패", e);
-            throw new CustomSystemException(VideoErrorCode.PROCESSING_ERROR);
+            log.error("DB 결과 저장 실패", e);
+            // 비동기 처리 중 발생한 예외는 별도 로깅
         }
     }
 
+    // --- Helper Methods ---
+
+    private void validateFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new CustomSystemException(VideoErrorCode.FILE_REQUIRED);
+        if (file.getSize() > maxFileSize) throw new CustomSystemException(VideoErrorCode.FILE_SIZE_EXCEEDED);
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
+        if (!ALLOWED_FORMATS.contains(extension)) throw new CustomSystemException(VideoErrorCode.INVALID_FILE_FORMAT);
+    }
+
+    private String saveFile(MultipartFile file, String analysisId) throws IOException {
+        Path uploadDir = Paths.get(uploadPath);
+        if (!Files.exists(uploadDir)) Files.createDirectories(uploadDir);
+        String extension = getFileExtension(file.getOriginalFilename());
+        String storedFilename = analysisId + "_" + System.currentTimeMillis() + "." + extension;
+        Files.copy(file.getInputStream(), uploadDir.resolve(storedFilename));
+        return storedFilename;
+    }
+
+    private String getFileExtension(String filename) {
+        return filename.substring(filename.lastIndexOf(".") + 1);
+    }
+
+    // --- Conversion Methods ---
+
     private VideoFileResponse convertToFileResponse(VideoFile file) {
+        if (file == null) return null;
         return VideoFileResponse.builder()
                 .fileId(file.getFileId())
                 .originalFilename(file.getOriginalFilename())
@@ -246,10 +227,11 @@ public class VideoAnalysisService {
     }
 
     private AnalysisResultResponse convertToResultResponse(AnalysisResult result) {
+        if (result == null) return null;
         return AnalysisResultResponse.builder()
                 .resultId(result.getResultId())
                 .analysisId(result.getAnalysisId())
-                .createdAt(result.getCreatedAt())
+                .createdAt(result.getAnalyzedAt()) // 도메인의 analyzedAt을 DTO의 createdAt에 매핑
                 .confidenceScore(result.getConfidenceScore())
                 .isDeepfake(result.getIsDeepfake())
                 .modelVersion(result.getModelVersion())
@@ -267,7 +249,7 @@ public class VideoAnalysisService {
                 .timestampSeconds(frame.getTimestampSeconds())
                 .isDeepfake(frame.getIsDeepfake())
                 .confidenceScore(frame.getConfidenceScore())
-                .anomalyType(frame.getAnomalyType())
+                .anomalyType(frame.getAnomalyRegions()) // 도메인 anomalyRegions -> DTO anomalyType
                 .features(frame.getFeatures())
                 .build();
     }

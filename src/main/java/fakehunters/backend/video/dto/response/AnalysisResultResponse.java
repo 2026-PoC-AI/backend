@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 @Data
 @Builder
 public class AnalysisResultResponse {
-    private String resultId;
-    private String analysisId;
+    private Long resultId;
+    private Long analysisId;
     private LocalDateTime createdAt;
     private BigDecimal confidenceScore;
     private Boolean isDeepfake;

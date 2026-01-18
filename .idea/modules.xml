@@ -3,10 +3,6 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/backend.main.iml" filepath="$PROJECT_DIR$/.idea/modules/backend.main.iml" />
-<<<<<<< HEAD
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/fakehunters.backend.main.iml" filepath="$PROJECT_DIR$/.idea/modules/fakehunters.backend.main.iml" />
-=======
->>>>>>> 290bb4c730e9628e2e572edd83c4379e6a03e06f
     </modules>
   </component>
 </project>

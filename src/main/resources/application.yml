@@ -3,37 +3,41 @@ spring:
     name: backend
 
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:testdb
-    username: sa
-    password:
+    url: jdbc:postgresql://pos.cdso6eyswiwz.ap-northeast-2.rds.amazonaws.com:5432/fake_hunters
+    username: pos
+    password: pospospos2026!!P
+    driver-class-name: org.postgresql.Driver
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
-  sql:
-    init:
-      mode: always  # 추가: schema.sql 자동 실행
+  ai:
+    openai:
+      api-key: 본인_비밀번호_쓰세요
+      chat:
+        model: gpt-4o-mini
 
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
-      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 mybatis:
-  mapper-locations: classpath:mappers/**/*.xml
-  type-aliases-package: fakehunters.backend.*.domain
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: fakehunters.backend
+  type-handlers-package: fakehunters.backend.global.mybatis
   configuration:
     map-underscore-to-camel-case: true
+    jdbc-type-for-null: NULL
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
-ai-service:
-  base-url: http://localhost:8000
-  timeout: 300000
+server:
+  port: 8080
 
-file:
-  upload:
-    path: uploads/videos
-  max-size: 104857600
+ai:
+  server:
+    url: http://localhost:8000/api/v1
+
+aws:
+  access-key: AKIA474X27ZTPH75HP
+  secret-key: 6BleiRCZMoWDpn4zyTBUIxndq7HMr7yJLooN+CfK
+  region: ap-northeast-2
+  s3:
+    bucket: fake-hunters-media-prod
