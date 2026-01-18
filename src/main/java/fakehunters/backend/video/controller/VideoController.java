@@ -11,7 +11,6 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @RestController
-@CrossOrigin(origins = "http://localhost:5173") // 프론트엔드 연동 설정
 @RequestMapping("/api/video")
 @RequiredArgsConstructor
 public class VideoController {

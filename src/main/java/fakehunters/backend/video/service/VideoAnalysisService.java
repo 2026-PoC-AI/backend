@@ -43,14 +43,11 @@ public class VideoAnalysisService {
 
     private static final List<String> ALLOWED_FORMATS = Arrays.asList("mp4", "avi", "mov");
 
-    /**
-     * 비디오 분석 요청 처리
-     */
-    @Transactional
+    // 비디오 분석 요청 처리
     public Mono<VideoAnalysisResponse> analyzeVideo(MultipartFile file) {
         validateFile(file);
 
-        // 1. 분석 작업 생성 (DB에서 Long ID 발급)
+        // 분석 작업 생성 (DB에서 Long ID 발급)
         VideoAnalysis videoAnalysis = VideoAnalysis.builder()
                 .title(file.getOriginalFilename())
                 .status("PENDING")
@@ -60,7 +57,7 @@ public class VideoAnalysisService {
         videoAnalysisMapper.insert(videoAnalysis);
         Long analysisId = videoAnalysis.getAnalysisId(); // 생성된 PK 확보
 
-        // 2. 파일 저장
+        // 파일 저장
         String storedFilename;
         try {
             storedFilename = saveFile(file, analysisId.toString());
@@ -69,7 +66,7 @@ public class VideoAnalysisService {
             throw new CustomSystemException(VideoErrorCode.UPLOAD_ERROR);
         }
 
-        // 3. DB에 파일 정보 저장
+        // DB에 파일 정보 저장
         VideoFile videoFile = VideoFile.builder()
                 .analysisId(analysisId)
                 .originalFilename(file.getOriginalFilename())
@@ -81,10 +78,10 @@ public class VideoAnalysisService {
                 .build();
         videoFileMapper.insert(videoFile);
 
-        // 4. 상태를 PROCESSING으로 변경
+        // 상태를 PROCESSING으로 변경
         videoAnalysisMapper.updateStatus(analysisId, "PROCESSING");
 
-        // 5. ★ FastAPI 호출 시 analysis_id 전달 ★
+        // FastAPI 호출 시 analysis_id 전달
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("file", file.getResource());
         builder.part("analysis_id", analysisId); // FastAPI가 이 ID를 기반으로 응답하게 함
@@ -106,9 +103,8 @@ public class VideoAnalysisService {
                 });
     }
 
-    /**
-     * 분석 결과 조회 (Long ID 사용)
-     */
+
+    // 분석 결과 조회 (Long ID 사용)
     @Transactional(readOnly = true)
     public Mono<VideoAnalysisResponse> getAnalysisResult(Long analysisId) {
         VideoAnalysis analysis = videoAnalysisMapper.findById(analysisId);
@@ -143,9 +139,7 @@ public class VideoAnalysisService {
                 .build());
     }
 
-    /**
-     * 내부 결과 저장 로직 (ID 체인 연결)
-     */
+    // 내부 결과 저장 로직 (ID 체인 연결)
     private void saveAnalysisResultInternal(Long analysisId, VideoAnalysisResponse response) {
         try {
             // 1. Result 저장
