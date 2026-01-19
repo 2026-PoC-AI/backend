@@ -47,9 +47,11 @@ public class VideoFileService {
      * 도메인 객체를 응답 DTO로 변환
      */
     private VideoFileResponse convertToResponse(VideoFile file) {
+        if (file == null) return null; // // Null 체크 추가
+
         return VideoFileResponse.builder()
                 .fileId(file.getFileId())
-                .analysisId(file.getAnalysisId()) // 연관된 분석 ID 포함
+                .analysisId(file.getAnalysisId())
                 .originalFilename(file.getOriginalFilename())
                 .storedFilename(file.getStoredFilename())
                 .filePath(file.getFilePath())
@@ -58,7 +60,8 @@ public class VideoFileService {
                 .resolution(file.getResolution())
                 .format(file.getFormat())
                 .fps(file.getFps())
-                .uploadedAt(file.getUploadedAt())
+                // 핵심: OffsetDateTime을 LocalDateTime으로 변환하여 DTO에 전달
+                .uploadedAt(file.getUploadedAt() != null ? file.getUploadedAt().toLocalDateTime() : null)
                 .build();
     }
 }
