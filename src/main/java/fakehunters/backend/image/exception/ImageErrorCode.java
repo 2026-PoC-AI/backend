@@ -31,7 +31,11 @@ public enum ImageErrorCode implements ErrorCode {
     UPLOAD_ERROR("IMAGE011", "이미지 업로드 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     PROCESSING_ERROR("IMAGE012", "이미지 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     COMPRESSION_ERROR("IMAGE013", "이미지 압축 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
-    DELETE_ERROR("IMAGE014", "이미지 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    DELETE_ERROR("IMAGE014", "이미지 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    ANALYSIS_NOT_READY("IMAGE015", "이미지 분석 결과가 아직 준비되지 않았습니다.", HttpStatus.CONFLICT),
+    LLM_RESPONSE_PARSE_FAILED("IMAGE016", "AI 리포트 생성 중 응답 파싱에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+
 
     private final String code;
     private final String message;
