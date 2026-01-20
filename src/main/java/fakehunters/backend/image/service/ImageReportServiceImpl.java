@@ -3,8 +3,6 @@ package fakehunters.backend.image.service;
 import fakehunters.backend.global.exception.custom.CustomBusinessException;
 import fakehunters.backend.global.exception.custom.CustomSystemException;
 import fakehunters.backend.image.ai.ImageReportGenerator;
-import fakehunters.backend.image.ai.MockImageReportGenerator;
-import fakehunters.backend.image.ai.OpenAiImageReportGenerator;
 import fakehunters.backend.image.domain.ImageAnalysisJob;
 import fakehunters.backend.image.domain.ImageAnalysisReport;
 import fakehunters.backend.image.domain.ImageAnalysisResult;
@@ -50,6 +48,10 @@ public class ImageReportServiceImpl implements ImageReportService {
             throw new CustomBusinessException(ImageErrorCode.ANALYSIS_NOT_READY);
         }
 
+        if (!"ANALYZED".equals(job.getJobStatus())) {
+            throw new CustomBusinessException(ImageErrorCode.ANALYSIS_NOT_READY);
+        }
+
         GeneratedReport generated;
         try {
             generated = reportGenerator.generate(results);
@@ -66,6 +68,8 @@ public class ImageReportServiceImpl implements ImageReportService {
                 .build();
 
         reportMapper.insert(report);
+
+        jobMapper.updateStatus(job.getJobId(), "REPORT_READY");
 
         return reportMapper.findByJobId(job.getJobId());
     }
