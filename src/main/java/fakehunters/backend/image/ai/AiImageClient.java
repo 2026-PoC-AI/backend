@@ -20,7 +20,7 @@ public class AiImageClient {
     public void requestDeepfakeAnalysis(UUID jobUuid, String s3Key) {
 
         aiClient.post()
-                .uri("/api/v1/image/deepfake")
+                .uri("/api/v1/images/analyze")
                 .body(Map.of(
                         "job_uuid", jobUuid.toString(),
                         "s3_key", s3Key
