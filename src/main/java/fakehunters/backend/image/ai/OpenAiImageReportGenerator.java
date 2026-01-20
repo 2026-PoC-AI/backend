@@ -19,7 +19,6 @@ import java.util.List;
  * 최종 신뢰 리포트를 생성하는 Generator
  */
 @Component
-@Profile("openai")
 public class OpenAiImageReportGenerator implements ImageReportGenerator {
 
     private final ChatClient chatClient;

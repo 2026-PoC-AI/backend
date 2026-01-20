@@ -1,6 +1,7 @@
 package fakehunters.backend.image.service;
 
 
+import fakehunters.backend.image.ai.AiImageClient;
 import fakehunters.backend.image.domain.ImageAnalysisInput;
 import fakehunters.backend.image.domain.ImageAnalysisJob;
 import fakehunters.backend.image.domain.ImageAnalysisResult;
@@ -14,18 +15,21 @@ import fakehunters.backend.image.mapper.ImageAnalysisInputMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisJobMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisResultMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageAnalysisServiceImpl implements ImageAnalysisService {
     private final ImageAnalysisJobMapper jobMapper;
     private final ImageAnalysisInputMapper inputMapper;
     private final ImageAnalysisResultMapper resultMapper;
+    private final AiImageClient aiImageClient;
 
     // 이미지 분석 Job 생성
     @Override
@@ -51,6 +55,19 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
                 .build();
 
         inputMapper.insert(input);
+
+
+        // AI 서버 딥페이크 분석 요청
+        try {
+            jobMapper.updateStatus(job.getJobId(), "ANALYZING");
+            aiImageClient.requestDeepfakeAnalysis(
+                    job.getJobUuid(),
+                    request.getS3Key()
+            );
+        } catch (Exception e) {
+            jobMapper.updateStatus(job.getJobId(), "FAILED");
+            log.warn("AI image analysis request failed. jobUuid={}", job.getJobUuid(), e);
+        }
 
         // 외부로는 UUID만 반환
         return new ImageAnalyzeResponse(job.getJobUuid());
@@ -101,7 +118,7 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
         resultMapper.insert(result);
 
         // Job 상태 업데이트
-        jobMapper.updateStatus(job.getJobId(), "COMPLETED");
+        jobMapper.updateStatus(job.getJobId(), "ANALYZED");
 
         return new DeepfakeResultResponse("SAVED");
     }
