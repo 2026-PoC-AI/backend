@@ -35,13 +35,21 @@ dependencies {
 	// PostgreSQL
 	runtimeOnly 'org.postgresql:postgresql:42.7.4'
 
-	// H2
-	runtimeOnly 'com.h2database:h2'
-
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.projectlombok:lombok'
+
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+    /* === AWS SDK for S3 (v2) === */
+    implementation 'software.amazon.awssdk:s3:2.25.62'
+
+    //Spring AI OpenAI 연동 모듈 추가
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai:1.0.0'
+
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.5'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -1,21 +1,21 @@
 package fakehunters.backend.audio.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fakehunters.backend.audio.domain.EvidenceItem;
 import fakehunters.backend.audio.domain.Grade;
-import fakehunters.backend.audio.dto.internal.AudioAnalysisResult;
+import fakehunters.backend.audio.dto.external.AiAudioRequest;
+import fakehunters.backend.audio.dto.external.AiAudioResponseWrapper;
 import fakehunters.backend.audio.dto.request.AnalyzeRequest;
 import fakehunters.backend.audio.dto.response.AnalyzeResponse;
 import fakehunters.backend.audio.mapper.AudioAnalysisResultInsertParam;
 import fakehunters.backend.audio.mapper.AudioAnalysisResultMapper;
+import fakehunters.backend.audio.dto.internal.AudioAnalysisResult; //
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,82 +23,64 @@ public class AudioService {
 
     private final AudioAnalysisResultMapper mapper;
     private final ObjectMapper objectMapper;
+    private final RestClient aiClient; // AI 서버 통신용
 
     @Transactional
-    public AnalyzeResponse insertTest(AnalyzeRequest req) {
+    public AnalyzeResponse analyze(AnalyzeRequest req) {
 
-        // 1️⃣ grade 변환
-        Grade grade = Grade.valueOf(req.grade().toUpperCase());
+        // 1. AI 서버 호출 (FastAPI)
+        AiAudioRequest aiRequest = new AiAudioRequest(req.inputAudioS3Key());
 
-        // 2️⃣ 더미 evidence / warnings (FastAPI 붙이기 전 임시)
-        String evidenceJson;
-        String warningsJson;
+        AiAudioResponseWrapper aiResponse = aiClient.post()
+                .uri("/audio/analyze")
+                .body(aiRequest)
+                .retrieve()
+                .body(AiAudioResponseWrapper.class);
 
+        if (aiResponse == null || !aiResponse.success() || aiResponse.data() == null) {
+            throw new RuntimeException("AI Server Analysis Failed");
+        }
+
+        AiAudioResponseWrapper.AiAudioData aiData = aiResponse.data();
+
+        // 2. DB 저장 파라미터 준비
         try {
-            evidenceJson = objectMapper.writeValueAsString(List.of(
-                    Map.of(
-                            "title", "DB Insert Test",
-                            "detail", "Audio analysis result inserted successfully",
-                            "startMs", 0,
-                            "endMs", 1200,
-                            "confidence", 0.85
-                    )
-            ));
+            // Evidence List -> JSON String 변환
+            String evidenceJson = objectMapper.writeValueAsString(aiData.evidence());
+            String warningsJson = objectMapper.writeValueAsString(aiData.warnings());
 
-            warningsJson = objectMapper.writeValueAsString(
-                    List.of("Temporary warning for insert test")
+            AudioAnalysisResultInsertParam param = new AudioAnalysisResultInsertParam(
+                    req.inputAudioS3Key(),
+                    req.inputAudioFormat(),
+                    req.durationSec() != null ? BigDecimal.valueOf(req.durationSec()) : null,
+                    aiData.risk_score(),              // AI가 준 점수
+                    Grade.valueOf(aiData.grade()),    // AI가 준 등급
+                    evidenceJson,
+                    warningsJson,
+                    null,
+                    req.spectrogramS3Key()
             );
+
+            // 3. DB Insert
+            Long id = mapper.insert(param);
+            AudioAnalysisResult saved = mapper.findById(id);
+
+            // 4. 최종 응답 반환
+            // (화면 표시용 DTO 변환)
+            // 실제 구현시에는 saved.evidence() (JsonNode)를 List<EvidenceItem>으로 변환하는 로직 필요
+            return new AnalyzeResponse(
+                    saved.id(),
+                    saved.createdAt(),
+                    saved.riskScore(),
+                    saved.grade(),
+                    List.of(), // TODO: JsonNode -> List 변환 로직 추가 필요
+                    List.of(), // TODO: JsonNode -> List 변환 로직 추가 필요
+                    saved.spectrogramS3Key(),
+                    null
+            );
+
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to build JSON", e);
+            throw new RuntimeException("Error during analysis processing", e);
         }
-
-        // 3️⃣ Insert Param 생성
-        AudioAnalysisResultInsertParam param =
-                new AudioAnalysisResultInsertParam(
-                        req.inputAudioS3Key(),
-                        req.inputAudioFormat(),
-                        req.durationSec() == null
-                                ? null
-                                : BigDecimal.valueOf(req.durationSec()),
-                        req.riskScore(),
-                        grade,
-                        evidenceJson,
-                        warningsJson,
-                        null, // featuresJson
-                        req.spectrogramS3Key()
-                );
-
-        // 4️⃣ INSERT → id 반환 (PostgreSQL RETURNING)
-        Long id = mapper.insert(param);
-        if (id == null || id <= 0) {
-            throw new IllegalStateException("Insert returned invalid id=" + id);
-        }
-        // 5️⃣ 방금 저장한 row 조회
-        AudioAnalysisResult saved = mapper.findById(id);
-
-
-
-        // 6️⃣ JsonNode → EvidenceItem 변환 (지금은 단순 더미)
-        List<EvidenceItem> evidence = List.of(
-                new EvidenceItem(
-                        "DB Insert Test",
-                        "Audio analysis result inserted successfully",
-                        0,
-                        1200,
-                        0.85
-                )
-        );
-
-        // 7️⃣ AnalyzeResponse 생성 (네 record에 정확히 맞춤)
-        return new AnalyzeResponse(
-                saved.id(),
-                saved.createdAt() == null ? OffsetDateTime.now() : saved.createdAt(),
-                saved.riskScore(),
-                saved.grade(),
-                evidence,
-                List.of("Temporary warning for insert test"),
-                saved.spectrogramS3Key(),
-                null // spectrogramUrl (지금은 null, 나중에 presigned URL)
-        );
     }
 }
