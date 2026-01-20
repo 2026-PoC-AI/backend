@@ -9,13 +9,14 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
+        registry.addMapping("/api/**")
                 .allowedOrigins(
-                        "http://localhost:5173",  // Vite 기본 포트
-                        "http://localhost:3000"   // CRA 기본 포트
+                        "http://localhost:5173",
+                        "http://localhost:3000"
                 )
-                .allowedMethods("*")
-                .allowedHeaders("*")
-                .allowCredentials(true);
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders("Content-Type", "Authorization")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 }

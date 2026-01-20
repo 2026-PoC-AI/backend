@@ -1,57 +1,82 @@
 package fakehunters.backend.video.controller;
 
-import fakehunters.backend.video.dto.response.VideoResponse;
-import fakehunters.backend.video.service.VideoService;
+import fakehunters.backend.video.dto.response.VideoAnalysisResponse;
+import fakehunters.backend.video.mapper.VideoFileMapper;
+import fakehunters.backend.video.service.VideoAnalysisService;
+import fakehunters.backend.video.domain.VideoFile;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Mono;
 
+
+@Slf4j
 @RestController
-@RequestMapping("/api/videos")
+@RequestMapping("/api/video")
 @RequiredArgsConstructor
 public class VideoController {
 
-    private final VideoService videoService;
+    private final VideoAnalysisService videoAnalysisService;
+    private final VideoFileMapper videoFileMapper;
 
-    // 비디오 조회
-    @GetMapping("/{videoId}")
-    public ResponseEntity<VideoResponse> getVideo(@PathVariable Long videoId) {
-        VideoResponse response = videoService.getVideo(videoId);
-        return ResponseEntity.ok(response);
+    @PostMapping("/analyze")
+    public Mono<ResponseEntity<VideoAnalysisResponse>> analyzeVideo(
+            @RequestParam("file") MultipartFile file) {
+
+        log.info("영상 분석 요청 - 파일명: {}, 크기: {}bytes",
+                file.getOriginalFilename(), file.getSize());
+
+        return videoAnalysisService.analyzeVideo(file)
+                .map(response -> {
+                    log.info("분석 요청 수락 - ID: {}, 상태: {}",
+                            response.getAnalysisId(), response.getStatus());
+                    return ResponseEntity.ok(response);
+                })
+                .onErrorResume(e -> {
+                    log.error("분석 프로세스 시작 실패", e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
+                });
     }
 
-    // 비디오 업로드
-    @PostMapping
-    public ResponseEntity<VideoResponse> uploadVideo(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam(required = false) String description
-    ) {
-        VideoResponse response = videoService.uploadVideo(file, description);
-        return ResponseEntity.ok(response);
+    @GetMapping("/analysis/{analysisId}")
+    public Mono<ResponseEntity<VideoAnalysisResponse>> getAnalysisResult(
+            @PathVariable Long analysisId) {
+
+        log.info("분석 결과 조회 요청 - ID: {}", analysisId);
+
+        return videoAnalysisService.getAnalysisResult(analysisId)
+                .map(ResponseEntity::ok)
+                .onErrorResume(e -> {
+                    log.error("분석 결과 조회 중 오류 발생 - ID: {}", analysisId, e);
+                    return Mono.just(ResponseEntity.notFound().build());
+                });
     }
 
-    // 비디오 삭제
-    @DeleteMapping("/{videoId}")
-    public ResponseEntity<Void> deleteVideo(
-            @PathVariable Long videoId,
-            @RequestParam Long userId
-    ) {
-        videoService.deleteVideo(videoId, userId);
-        return ResponseEntity.noContent().build();
-    }
+    /**
+     * 브라우저 호환 비디오 파일 제공
+     */
+    @GetMapping("/files/{analysisId}")
+    public ResponseEntity<String> getVideoFile(@PathVariable Long analysisId) {
+        try {
+            log.info("=== 비디오 파일 요청 시작 - Analysis ID: {} ===", analysisId);
 
-    // 딥페이크 탐지
-    @PostMapping("/{videoId}/detect")
-    public ResponseEntity<VideoResponse> detectDeepfake(@PathVariable Long videoId) {
-        VideoResponse response = videoService.detectDeepfake(videoId);
-        return ResponseEntity.ok(response);
-    }
+            VideoFile videoFile = videoFileMapper.findByAnalysisId(analysisId);
+            log.info("VideoFile 조회 결과: {}", videoFile);
 
-    // 프레임 추출
-    @PostMapping("/{videoId}/extract-frames")
-    public ResponseEntity<Void> extractFrames(@PathVariable Long videoId) {
-        videoService.extractFrames(videoId);
-        return ResponseEntity.ok().build();
+            if (videoFile == null) {
+                return ResponseEntity.ok("VideoFile is null");
+            }
+
+            return ResponseEntity.ok("File info: " +
+                    "fileId=" + videoFile.getFileId() +
+                    ", filePath=" + videoFile.getFilePath() +
+                    ", webFilePath=" + videoFile.getWebFilePath());
+
+        } catch (Exception e) {
+            log.error("=== 에러 발생 ===", e);
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
     }
 }
