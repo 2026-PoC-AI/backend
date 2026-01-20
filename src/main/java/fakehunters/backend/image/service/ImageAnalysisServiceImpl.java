@@ -1,6 +1,7 @@
 package fakehunters.backend.image.service;
 
 
+import com.fasterxml.jackson.databind.JsonNode;
 import fakehunters.backend.image.ai.AiImageClient;
 import fakehunters.backend.image.domain.ImageAnalysisInput;
 import fakehunters.backend.image.domain.ImageAnalysisJob;
@@ -85,32 +86,26 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
             throw new IllegalArgumentException("Image analysis job not found");
         }
 
-        // Risk Score 계산
-        int riskScore = (int) Math.round(request.getConfidence() * 100);
+        JsonNode output = request.getRawResult().get("output");
 
-        // Risk Level 계산
-        String riskLevel =
-                riskScore >= 70 ? "HIGH" :
-                        riskScore >= 40 ? "MEDIUM" : "LOW";
+        String label = output.get("decision").asText();
+        String riskLevel = output.get("risk_level").asText();
+        String interpretation = output.get("message").asText();
 
-        // Label 결정
-        String label = riskScore >= 50 ? "FAKE" : "REAL";
+        double confidence = request.getConfidence();
 
-        // Interpretation
-        String interpretation =
-                "This image shows a " + riskLevel +
-                        " probability of being AI-generated.";
+        int riskScore = (int) Math.round(confidence * 100);
 
         ImageAnalysisResult result = ImageAnalysisResult.builder()
                 .resultUuid(UUID.randomUUID())
                 .jobId(job.getJobId())
                 .resultTaskType("deepfake_image")
                 .resultLabel(label)
-                .resultConfidence(request.getConfidence())
+                .resultConfidence(confidence)
                 .resultRiskScore(riskScore)
                 .resultRiskLevel(riskLevel)
                 .resultInterpretation(interpretation)
-                .resultEvidence(request.getEvidence())
+                .resultEvidence(null)
                 .resultWarnings(null)
                 .resultJson(request.getRawResult())
                 .build();
