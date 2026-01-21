@@ -72,6 +72,8 @@ public class OpenAiImageReportGenerator implements ImageReportGenerator {
           일반 사용자가 이해할 수 있도록 과도한 기술 용어 없이 요약하라.
         - guidance:
           이미지 사용/공유/검증과 관련된 실질적인 행동 조언을 작성하라.
+        - summary는 2~3문장 이내로 작성
+        - guidance는 사용자가 행동으로 옮길 수 있게 작성
 
         아래는 이미지 분석 결과이다:
         %s

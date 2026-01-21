@@ -17,6 +17,7 @@ import fakehunters.backend.image.mapper.ImageAnalysisJobMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisResultMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,22 +31,21 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
     private final ImageAnalysisJobMapper jobMapper;
     private final ImageAnalysisInputMapper inputMapper;
     private final ImageAnalysisResultMapper resultMapper;
-    private final AiImageClient aiImageClient;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 이미지 분석 Job 생성
     @Override
     @Transactional
     public ImageAnalyzeResponse createAnalysis(ImageAnalyzeRequest request) {
 
-        // 분석 Job 생성
+        // 1. Job 생성
         ImageAnalysisJob job = ImageAnalysisJob.builder()
                 .jobUuid(UUID.randomUUID())
                 .jobStatus("CREATED")
                 .build();
-
         jobMapper.insert(job);
 
-        // 입력 이미지 메타데이터 저장
+        // 2. Input 저장
         ImageAnalysisInput input = ImageAnalysisInput.builder()
                 .inputUuid(UUID.randomUUID())
                 .jobId(job.getJobId())
@@ -54,21 +54,19 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
                 .inputFilesize(request.getFileSize())
                 .inputMimeType(request.getMimeType())
                 .build();
-
         inputMapper.insert(input);
 
+        // 3. 상태 변경
+        jobMapper.updateStatus(job.getJobId(), "ANALYZING");
 
-        // AI 서버 딥페이크 분석 요청
-        try {
-            jobMapper.updateStatus(job.getJobId(), "ANALYZING");
-            aiImageClient.requestDeepfakeAnalysis(
-                    job.getJobUuid(),
-                    request.getS3Key()
-            );
-        } catch (Exception e) {
-            jobMapper.updateStatus(job.getJobId(), "FAILED");
-            log.warn("AI image analysis request failed. jobUuid={}", job.getJobUuid(), e);
-        }
+        // 4. 🔥 AI 호출 ❌ → 이벤트 발행 ✅
+        eventPublisher.publishEvent(
+                new ImageAnalysisCreatedEvent(
+                        job.getJobUuid(),
+                        request.getS3Key()
+                )
+        );
+
 
         // 외부로는 UUID만 반환
         return new ImageAnalyzeResponse(job.getJobUuid());
@@ -81,6 +79,7 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
 
         ImageAnalysisJob job =
                 jobMapper.findByJobUuid(request.getJobUuid());
+        log.info("saveDeepfakeResult called. jobUuid={}", request.getJobUuid());
 
         if (job == null) {
             throw new IllegalArgumentException("Image analysis job not found");
