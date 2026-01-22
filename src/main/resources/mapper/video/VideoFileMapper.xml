@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.video.mapper.VideoFileMapper">
+
+    <resultMap id="videoFileResultMap" type="fakehunters.backend.video.domain.VideoFile">
+        <id property="fileId" column="file_id"/>
+        <result property="originalFilename" column="original_filename"/>
+        <result property="storedFilename" column="stored_filename"/>
+        <result property="filePath" column="file_path"/>
+        <result property="webFilePath" column="web_file_path"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="durationSeconds" column="duration_seconds"/>
+        <result property="resolution" column="resolution"/>
+        <result property="format" column="format"/>
+        <result property="fps" column="fps"/>
+        <result property="uploadedAt" column="uploaded_at"/>
+        <result property="analysisId" column="analysis_id"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="fileId" keyColumn="file_id">
+        INSERT INTO video_analysis_input (
+        original_filename,
+        stored_filename,
+        file_path,
+        web_file_path,
+        file_size,
+        duration_seconds,
+        resolution,
+        format,
+        fps,
+        analysis_id
+        )
+        VALUES (
+        #{originalFilename},
+        #{storedFilename},
+        #{filePath},
+        #{webFilePath},
+        #{fileSize},
+        #{durationSeconds},
+        #{resolution},
+        #{format},
+        #{fps},
+        #{analysisId}
+        )
+    </insert>
+
+    <select id="findById" resultMap="videoFileResultMap">
+        SELECT
+        file_id,
+        original_filename,
+        stored_filename,
+        file_path,
+        web_file_path,
+        file_size,
+        duration_seconds,
+        resolution,
+        format,
+        fps,
+        uploaded_at,
+        analysis_id
+        FROM video_analysis_input
+        WHERE file_id = #{fileId}
+    </select>
+
+    <select id="findByAnalysisId" resultMap="videoFileResultMap">
+        SELECT
+        file_id,
+        original_filename,
+        stored_filename,
+        file_path,
+        web_file_path,
+        file_size,
+        duration_seconds,
+        resolution,
+        format,
+        fps,
+        uploaded_at,
+        analysis_id
+        FROM video_analysis_input
+        WHERE analysis_id = #{analysisId}
+    </select>
+
+</mapper>

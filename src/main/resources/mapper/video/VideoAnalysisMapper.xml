@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.video.mapper.VideoAnalysisMapper">
+
+    <resultMap id="videoAnalysisResultMap" type="fakehunters.backend.video.domain.VideoAnalysis">
+        <id property="analysisId" column="analysis_id"/>
+        <result property="title" column="title"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="completedAt" column="completed_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="analysisId" keyColumn="analysis_id">
+        INSERT INTO video_analysis_job (title, status)
+        VALUES (#{title}, #{status})
+    </insert>
+
+    <select id="findById" resultMap="videoAnalysisResultMap">
+        SELECT * FROM video_analysis_job WHERE analysis_id = #{analysisId}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE video_analysis_job SET status = #{status} WHERE analysis_id = #{analysisId}
+    </update>
+
+    <update id="updateCompletedAt">
+        UPDATE video_analysis_job SET completed_at = CURRENT_TIMESTAMP WHERE analysis_id = #{analysisId}
+    </update>
+</mapper>
