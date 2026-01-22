@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.image.mapper.ImageAnalysisInputMapper">
+
+    <insert id="insert" parameterType="fakehunters.backend.image.domain.ImageAnalysisInput"
+            useGeneratedKeys="true" keyProperty="inputId">
+        INSERT INTO image_analysis_input (
+        input_uuid,
+        job_id,
+        input_filename,
+        input_s3_key,
+        input_filesize,
+        input_mime_type
+        ) VALUES (
+        #{inputUuid, jdbcType=OTHER},
+        #{jobId},
+        #{inputFilename},
+        #{inputS3Key},
+        #{inputFilesize},
+        #{inputMimeType}
+        )
+    </insert>
+
+    <select id="findByJobId"
+            parameterType="long"
+            resultType="fakehunters.backend.image.domain.ImageAnalysisInput">
+        SELECT *
+        FROM image_analysis_input
+        WHERE job_id = #{jobId}
+    </select>
+
+</mapper>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.image.mapper.ImageAnalysisHistoryMapper">
+
+    <select id="findHistoryByJobUuids"
+            parameterType="list"
+            resultType="fakehunters.backend.image.dto.response.ImageHistoryItemResponse">
+
+        SELECT
+        j.job_uuid        AS jobUuid,
+        i.input_filename AS filename,
+        j.job_status      AS jobStatus,
+        r.report_overall_risk_level AS overallRiskLevel,
+        j.created_at      AS createdAt
+        FROM image_analysis_job j
+        JOIN image_analysis_input i
+        ON j.job_id = i.job_id
+        LEFT JOIN image_analysis_report r
+        ON j.job_id = r.job_id
+        WHERE j.job_uuid IN
+        <foreach collection="jobUuids" item="uuid" open="(" separator="," close=")">
+            #{uuid, jdbcType=OTHER}
+        </foreach>
+        ORDER BY j.created_at DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.image.mapper.ImageAnalysisReportMapper">
+
+    <insert id="insert"
+            parameterType="fakehunters.backend.image.domain.ImageAnalysisReport"
+            useGeneratedKeys="true"
+            keyProperty="reportId">
+
+        INSERT INTO image_analysis_report (
+        report_uuid,
+        job_id,
+        report_overall_risk_level,
+        report_summary,
+        report_guidance
+        ) VALUES (
+        #{reportUuid, jdbcType=OTHER},
+        #{jobId},
+        #{reportOverallRiskLevel},
+        #{reportSummary},
+        #{reportGuidance, typeHandler=fakehunters.backend.global.mybatis.JsonNodeTypeHandler}
+        )
+    </insert>
+
+    <select id="findByJobId"
+            parameterType="long"
+            resultType="fakehunters.backend.image.domain.ImageAnalysisReport">
+        SELECT *
+        FROM image_analysis_report
+        WHERE job_id = #{jobId}
+    </select>
+
+</mapper>

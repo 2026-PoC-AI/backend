@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.image.mapper.ImageAnalysisJobMapper">
+
+    <insert id="insert" parameterType="fakehunters.backend.image.domain.ImageAnalysisJob"
+            useGeneratedKeys="true" keyProperty="jobId">
+        INSERT INTO image_analysis_job (
+        job_uuid,
+        job_status
+        ) VALUES (
+        #{jobUuid, jdbcType=OTHER},
+        #{jobStatus}
+        )
+    </insert>
+
+    <select id="findByJobUuid" parameterType="java.util.UUID"
+            resultType="fakehunters.backend.image.domain.ImageAnalysisJob">
+        SELECT *
+        FROM image_analysis_job
+        WHERE job_uuid = #{jobUuid}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE image_analysis_job
+        SET job_status = #{jobStatus}
+        WHERE job_id = #{jobId}
+    </update>
+</mapper>
