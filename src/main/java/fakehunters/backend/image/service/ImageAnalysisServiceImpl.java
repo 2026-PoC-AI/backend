@@ -2,19 +2,20 @@ package fakehunters.backend.image.service;
 
 
 import com.fasterxml.jackson.databind.JsonNode;
+import fakehunters.backend.global.s3.service.PresignedUrlService;
 import fakehunters.backend.image.ai.AiImageClient;
+import fakehunters.backend.image.domain.ImageAnalysisArtifact;
 import fakehunters.backend.image.domain.ImageAnalysisInput;
 import fakehunters.backend.image.domain.ImageAnalysisJob;
 import fakehunters.backend.image.domain.ImageAnalysisResult;
 import fakehunters.backend.image.dto.request.DeepfakeResultRequest;
 import fakehunters.backend.image.dto.request.ImageAnalyzeRequest;
-import fakehunters.backend.image.dto.response.DeepfakeResultResponse;
-import fakehunters.backend.image.dto.response.ImageAnalysisQueryResponse;
-import fakehunters.backend.image.dto.response.ImageAnalyzeResponse;
-import fakehunters.backend.image.dto.response.ImageResultDetailResponse;
+import fakehunters.backend.image.dto.response.*;
+import fakehunters.backend.image.mapper.ImageAnalysisArtifactMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisInputMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisJobMapper;
 import fakehunters.backend.image.mapper.ImageAnalysisResultMapper;
+import fakehunters.backend.image.utils.ArtifactIndexParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,6 +32,8 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
     private final ImageAnalysisJobMapper jobMapper;
     private final ImageAnalysisInputMapper inputMapper;
     private final ImageAnalysisResultMapper resultMapper;
+    private final ImageAnalysisArtifactMapper artifactMapper;
+    private final PresignedUrlService presignedUrlService;
     private final ApplicationEventPublisher eventPublisher;
 
     // 이미지 분석 Job 생성
@@ -114,6 +117,20 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
         // Job 상태 업데이트
         jobMapper.updateStatus(job.getJobId(), "ANALYZED");
 
+        if (request.getArtifacts() != null && !request.getArtifacts().isEmpty()) {
+            for (var a : request.getArtifacts()) {
+                ImageAnalysisArtifact artifact = ImageAnalysisArtifact.builder()
+                        .artifactUuid(UUID.randomUUID())
+                        .jobId(job.getJobId())
+                        .artifactStage(a.getArtifactStage())
+                        .artifactType(a.getArtifactType())
+                        .artifactS3Key(a.getS3Key())
+                        .build();
+
+                artifactMapper.insert(artifact);
+            }
+        }
+
         return new DeepfakeResultResponse("SAVED");
     }
 
@@ -132,6 +149,9 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
         List<ImageAnalysisResult> results =
                 resultMapper.findByJobId(job.getJobId());
 
+        List<ImageAnalysisArtifact> artifacts =
+                artifactMapper.findByJobId(job.getJobId());
+
         return new ImageAnalysisQueryResponse(
                 new ImageAnalysisQueryResponse.JobInfo(
                         job.getJobUuid(),
@@ -140,7 +160,9 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
                 ),
                 new ImageAnalysisQueryResponse.InputInfo(
                         input.getInputFilename(),
-                        input.getInputS3Key(),
+                        presignedUrlService
+                                .generateDownloadUrl(input.getInputS3Key())
+                                .getUrl(),
                         input.getInputMimeType(),
                         input.getInputFilesize()
                 ),
@@ -155,6 +177,23 @@ public class ImageAnalysisServiceImpl implements ImageAnalysisService {
                                 r.getResultEvidence(),
                                 r.getResultWarnings()
                         ))
+                        .toList(),
+                artifacts.stream()
+                        .map(a -> {
+                            String presignedUrl =
+                                    presignedUrlService
+                                            .generateDownloadUrl(a.getArtifactS3Key())
+                                            .getUrl();
+
+                            Integer index = ArtifactIndexParser.parseIndex(a.getArtifactS3Key());
+
+                            return new ImageArtifactResponse(
+                                    a.getArtifactStage(),
+                                    a.getArtifactType(),
+                                    presignedUrl,
+                                    index
+                            );
+                        })
                         .toList()
         );
     }

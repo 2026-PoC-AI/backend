@@ -48,7 +48,8 @@ public class ImageReportServiceImpl implements ImageReportService {
             throw new CustomBusinessException(ImageErrorCode.ANALYSIS_NOT_READY);
         }
 
-        if (!"ANALYZED".equals(job.getJobStatus())) {
+        if (!"ANALYZED".equals(job.getJobStatus())
+                && !"REPORT_READY".equals(job.getJobStatus())) {
             throw new CustomBusinessException(ImageErrorCode.ANALYSIS_NOT_READY);
         }
 
@@ -83,6 +84,11 @@ public class ImageReportServiceImpl implements ImageReportService {
             throw new CustomBusinessException(ImageErrorCode.NOT_FOUND);
         }
 
-        return reportMapper.findByJobId(job.getJobId());
+        ImageAnalysisReport report = reportMapper.findByJobId(job.getJobId());
+        if (report == null) {
+            throw new CustomBusinessException(ImageErrorCode.NOT_FOUND);
+        }
+
+        return report;
     }
 }

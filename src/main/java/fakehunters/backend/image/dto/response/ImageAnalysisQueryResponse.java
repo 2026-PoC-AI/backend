@@ -13,6 +13,7 @@ public class ImageAnalysisQueryResponse {
     private JobInfo job;
     private InputInfo input;
     private List<ImageResultDetailResponse> results;
+    private List<ImageArtifactResponse> artifacts;
 
     @Data
     @AllArgsConstructor
@@ -26,7 +27,7 @@ public class ImageAnalysisQueryResponse {
     @AllArgsConstructor
     public static class InputInfo {
         private String filename;
-        private String s3Key;
+        private String url;
         private String mimeType;
         private Long fileSize;
     }
