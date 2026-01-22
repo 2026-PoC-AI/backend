@@ -66,7 +66,7 @@ public class OpenAiImageReportGenerator implements ImageReportGenerator {
 
             {
               "overallRiskLevel": "LOW | MEDIUM | HIGH",
-              "summary": "이미지의 신뢰도에 대한 300자 요약 (한국어)",
+              "summary": "이미지의 신뢰도에 대한 최소 300자 요약 (한국어)",
               "guidance": [
                 "사용자가 취해야 할 행동 가이드 (한국어)",
                 "사용자가 취해야 할 행동 가이드 (한국어)",
