@@ -299,6 +299,11 @@ data/
 !src/main/resources/data/*.json
 !src/test/resources/**/*.json
 
+# MyBatis mapper XML은 버전 관리 대상
+!src/main/resources/mapper/**/*.xml
+!src/main/resources/mappers/**/*.xml
+!src/main/resources/mybatis/**/*.xml
+
 ### 기타 ###
 # 사용자 정의 설정
 *.user

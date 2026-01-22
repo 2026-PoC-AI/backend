@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.video.mapper.AnalysisResultMapper">
+
+    <resultMap id="analysisResultResultMap" type="fakehunters.backend.video.domain.AnalysisResult">
+        <id property="resultId" column="result_id"/>
+        <result property="analysisId" column="analysis_id"/>
+        <result property="isDeepfake" column="is_deepfake"/>
+        <result property="confidenceScore" column="confidence_score"/>
+        <result property="modelVersion" column="model_version"/>
+        <result property="processingTimeMs" column="processing_time_ms"/>
+        <result property="detectedTechniques" column="detected_techniques"/>
+        <result property="summary" column="summary"/>
+        <result property="analyzedAt" column="analyzed_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.video.domain.AnalysisResult"
+            useGeneratedKeys="true" keyProperty="resultId" keyColumn="result_id">
+        INSERT INTO video_analysis_result (
+        analysis_id,
+        is_deepfake,
+        confidence_score,
+        model_version,
+        processing_time_ms,
+        detected_techniques,
+        summary,
+        analyzed_at
+        ) VALUES (
+        #{analysisId},
+        #{isDeepfake},
+        #{confidenceScore},
+        #{modelVersion},
+        #{processingTimeMs},
+        <choose>
+            <when test="detectedTechniques != null and detectedTechniques != ''">
+                string_to_array(#{detectedTechniques}, ',')::text[]
+            </when>
+            <otherwise>
+                NULL
+            </otherwise>
+        </choose>,
+        #{summary},
+        #{analyzedAt}
+        )
+    </insert>
+
+    <select id="findById" resultMap="analysisResultResultMap">
+        SELECT * FROM video_analysis_result WHERE result_id = #{resultId}
+    </select>
+
+    <select id="findByAnalysisId" resultMap="analysisResultResultMap">
+        SELECT * FROM video_analysis_result WHERE analysis_id = #{analysisId}
+    </select>
+
+</mapper>
