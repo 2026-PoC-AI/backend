@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioDetectionIndicatorMapper">
+
+    <resultMap id="AudioDetectionIndicatorMap" type="fakehunters.backend.audio.domain.AudioDetectionIndicator">
+        <id property="id" column="id"/>
+        <result property="analysisResultId" column="analysis_result_id"/>
+        <result property="indicatorType" column="indicator_type"/>
+        <result property="description" column="description"/>
+        <result property="severity" column="severity"/>
+        <result property="confidence" column="confidence"/>
+        <result property="timeStart" column="time_start"/>
+        <result property="timeEnd" column="time_end"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioDetectionIndicator"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_detection_indicators (
+        analysis_result_id, indicator_type, description, severity, confidence,
+        time_start, time_end, created_at
+        ) VALUES (
+        #{analysisResultId}, #{indicatorType}, #{description}, #{severity}, #{confidence},
+        #{timeStart}, #{timeEnd}, NOW()
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO audio_detection_indicators (
+        analysis_result_id, indicator_type, description, severity, confidence,
+        time_start, time_end, created_at
+        ) VALUES
+        <foreach collection="indicators" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.indicatorType}, #{item.description},
+            #{item.severity}, #{item.confidence}, #{item.timeStart}, #{item.timeEnd}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByAnalysisResultId" resultMap="AudioDetectionIndicatorMap">
+        SELECT * FROM audio_detection_indicators
+        WHERE analysis_result_id = #{analysisResultId}
+    </select>
+
+</mapper>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioSpectrogramHeatmapMapper">
+
+    <resultMap id="AudioSpectrogramHeatmapMap" type="fakehunters.backend.audio.domain.AudioSpectrogramHeatmap">
+        <id property="id" column="id"/>
+        <result property="analysisResultId" column="analysis_result_id"/>
+        <result property="heatmapUrl" column="heatmap_url"/>
+        <result property="heatmapType" column="heatmap_type"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioSpectrogramHeatmap"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_spectrogram_heatmap (
+        analysis_result_id, heatmap_url, heatmap_type, created_at
+        ) VALUES (
+        #{analysisResultId}, #{heatmapUrl}, #{heatmapType}, NOW()
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO audio_spectrogram_heatmap (
+        analysis_result_id, heatmap_url, heatmap_type, created_at
+        ) VALUES
+        <foreach collection="heatmaps" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.heatmapUrl}, #{item.heatmapType}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByAnalysisResultId" resultMap="AudioSpectrogramHeatmapMap">
+        SELECT * FROM audio_spectrogram_heatmap
+        WHERE analysis_result_id = #{analysisResultId}
+    </select>
+
+</mapper>

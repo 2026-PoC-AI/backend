@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioAnalysisResultMapper">
+
+    <resultMap id="AudioAnalysisResultMap" type="fakehunters.backend.audio.domain.AudioAnalysisResult">
+        <id property="id" column="id"/>
+        <result property="audioFileId" column="audio_file_id"/>
+        <result property="prediction" column="prediction"/>
+        <result property="confidence" column="confidence"/>
+        <result property="realProbability" column="real_probability"/>
+        <result property="fakeProbability" column="fake_probability"/>
+        <result property="suspectedMethod" column="suspected_method"/>
+        <result property="methodConfidence" column="method_confidence"/>
+        <result property="processingTime" column="processing_time"/>
+        <result property="analyzedAt" column="analyzed_at"/>
+        <result property="modelVersion" column="model_version"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioAnalysisResult"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_analysis_results (
+        audio_file_id, prediction, confidence, real_probability, fake_probability,
+        suspected_method, method_confidence, processing_time, analyzed_at, model_version,
+        created_at, updated_at
+        ) VALUES (
+        #{audioFileId}, #{prediction}, #{confidence}, #{realProbability}, #{fakeProbability},
+        #{suspectedMethod}, #{methodConfidence}, #{processingTime}, NOW(), #{modelVersion},
+        NOW(), NOW()
+        )
+    </insert>
+
+    <select id="findById" resultMap="AudioAnalysisResultMap">
+        SELECT * FROM audio_analysis_results
+        WHERE id = #{id}
+    </select>
+
+    <select id="findByAudioFileId" resultMap="AudioAnalysisResultMap">
+        SELECT * FROM audio_analysis_results
+        WHERE audio_file_id = #{audioFileId}
+    </select>
+
+    <select id="existsByAudioFileId" resultType="boolean">
+        SELECT EXISTS(
+        SELECT 1 FROM audio_analysis_results
+        WHERE audio_file_id = #{audioFileId}
+        )
+    </select>
+
+</mapper>

@@ -1,13 +1,18 @@
 package fakehunters.backend.audio.mapper;
 
-import fakehunters.backend.audio.dto.internal.AudioAnalysisResult;
+import fakehunters.backend.audio.domain.AudioAnalysisResult;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import java.util.Optional;
 
 @Mapper
 public interface AudioAnalysisResultMapper {
 
-    Long insert(AudioAnalysisResultInsertParam param);
+    void insert(AudioAnalysisResult result);
 
-    AudioAnalysisResult findById(@Param("id") long id);
+    Optional<AudioAnalysisResult> findById(@Param("id") Long id);
+
+    Optional<AudioAnalysisResult> findByAudioFileId(@Param("audioFileId") Long audioFileId);
+
+    boolean existsByAudioFileId(@Param("audioFileId") Long audioFileId);
 }

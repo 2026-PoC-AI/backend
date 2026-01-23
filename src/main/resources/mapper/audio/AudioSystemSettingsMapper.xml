@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioSystemSettingsMapper">
+
+    <resultMap id="AudioSystemSettingsMap" type="fakehunters.backend.audio.domain.AudioSystemSettings">
+        <id property="key" column="key"/>
+        <result property="value" column="value"/>
+        <result property="description" column="description"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findByKey" resultMap="AudioSystemSettingsMap">
+        SELECT * FROM audio_system_settings
+        WHERE key = #{key}
+    </select>
+
+    <update id="updateValue">
+        UPDATE audio_system_settings
+        SET value = #{value}, updated_at = NOW()
+        WHERE key = #{key}
+    </update>
+
+</mapper>
