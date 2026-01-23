@@ -13,7 +13,7 @@
         <result property="riskScore" column="risk_score"/>
         <result property="reason" column="reason"/>
         <result property="indicators" column="indicators"
-                typeHandler="fakehunters.backend.global.mybatis.JsonNodeTypeHandler"/>
+                typeHandler="fakehunters.backend.global.mybatis.StringListTypeHandler"/>
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
