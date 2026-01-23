@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioTimeSegmentAnalysisMapper">
+
+    <resultMap id="AudioTimeSegmentAnalysisMap" type="fakehunters.backend.audio.domain.AudioTimeSegmentAnalysis">
+        <id property="id" column="id"/>
+        <result property="analysisResultId" column="analysis_result_id"/>
+        <result property="startTime" column="start_time"/>
+        <result property="endTime" column="end_time"/>
+        <result property="riskLevel" column="risk_level"/>
+        <result property="riskScore" column="risk_score"/>
+        <result property="reason" column="reason"/>
+        <result property="indicators" column="indicators"
+                typeHandler="fakehunters.backend.global.mybatis.StringListTypeHandler"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioTimeSegmentAnalysis"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_time_segment_analysis (
+        analysis_result_id, start_time, end_time, risk_level, risk_score, reason, indicators, created_at
+        ) VALUES (
+        #{analysisResultId}, #{startTime}, #{endTime}, #{riskLevel}, #{riskScore}, #{reason},
+        #{indicators, typeHandler=fakehunters.backend.global.mybatis.JsonNodeTypeHandler}::jsonb, NOW()
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO audio_time_segment_analysis (
+        analysis_result_id, start_time, end_time, risk_level, risk_score, reason, indicators, created_at
+        ) VALUES
+        <foreach collection="segments" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.startTime}, #{item.endTime}, #{item.riskLevel},
+            #{item.riskScore}, #{item.reason},
+            #{item.indicators, typeHandler=fakehunters.backend.global.mybatis.JsonNodeTypeHandler}::jsonb, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByAnalysisResultIdOrderByStartTimeAsc" resultMap="AudioTimeSegmentAnalysisMap">
+        SELECT * FROM audio_time_segment_analysis
+        WHERE analysis_result_id = #{analysisResultId}
+        ORDER BY start_time ASC
+    </select>
+
+</mapper>

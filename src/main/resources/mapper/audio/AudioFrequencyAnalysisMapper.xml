@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioFrequencyAnalysisMapper">
+
+    <resultMap id="AudioFrequencyAnalysisMap" type="fakehunters.backend.audio.domain.AudioFrequencyAnalysis">
+        <id property="id" column="id"/>
+        <result property="analysisResultId" column="analysis_result_id"/>
+        <result property="frequencyBand" column="frequency_band"/>
+        <result property="anomalyScore" column="anomaly_score"/>
+        <result property="isSuspicious" column="is_suspicious"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioFrequencyAnalysis"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_frequency_analysis (
+        analysis_result_id, frequency_band, anomaly_score, is_suspicious, created_at
+        ) VALUES (
+        #{analysisResultId}, #{frequencyBand}, #{anomalyScore}, #{isSuspicious}, NOW()
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO audio_frequency_analysis (
+        analysis_result_id, frequency_band, anomaly_score, is_suspicious, created_at
+        ) VALUES
+        <foreach collection="analyses" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.frequencyBand}, #{item.anomalyScore},
+            #{item.isSuspicious}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByAnalysisResultIdOrderByFrequencyBandAsc" resultMap="AudioFrequencyAnalysisMap">
+        SELECT * FROM audio_frequency_analysis
+        WHERE analysis_result_id = #{analysisResultId}
+        ORDER BY frequency_band ASC
+    </select>
+
+</mapper>

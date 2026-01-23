@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.audio.mapper.AudioModelPredictionMapper">
+
+    <resultMap id="AudioModelPredictionMap" type="fakehunters.backend.audio.domain.AudioModelPrediction">
+        <id property="id" column="id"/>
+        <result property="analysisResultId" column="analysis_result_id"/>
+        <result property="modelName" column="model_name"/>
+        <result property="modelType" column="model_type"/>
+        <result property="realProbability" column="real_probability"/>
+        <result property="fakeProbability" column="fake_probability"/>
+        <result property="prediction" column="prediction"/>
+        <result property="confidence" column="confidence"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="fakehunters.backend.audio.domain.AudioModelPrediction"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audio_model_predictions (
+        analysis_result_id, model_name, model_type, real_probability, fake_probability,
+        prediction, confidence, created_at
+        ) VALUES (
+        #{analysisResultId}, #{modelName}, #{modelType}, #{realProbability}, #{fakeProbability},
+        #{prediction}, #{confidence}, NOW()
+        )
+    </insert>
+
+    <insert id="insertBatch">
+        INSERT INTO audio_model_predictions (
+        analysis_result_id, model_name, model_type, real_probability, fake_probability,
+        prediction, confidence, created_at
+        ) VALUES
+        <foreach collection="predictions" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.modelName}, #{item.modelType},
+            #{item.realProbability}, #{item.fakeProbability}, #{item.prediction},
+            #{item.confidence}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByAnalysisResultId" resultMap="AudioModelPredictionMap">
+        SELECT * FROM audio_model_predictions
+        WHERE analysis_result_id = #{analysisResultId}
+    </select>
+
+</mapper>
