@@ -13,9 +13,7 @@ public interface AudioFileMapper {
 
     Optional<AudioFile> findById(@Param("id") Long id);
 
-    Optional<AudioFile> findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
-
-    List<AudioFile> findByUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
+    List<AudioFile> findAllOrderByCreatedAtDesc();
 
     List<AudioFile> findByStatus(@Param("status") String status);
 

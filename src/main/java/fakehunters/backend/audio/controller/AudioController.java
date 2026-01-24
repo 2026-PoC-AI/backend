@@ -20,10 +20,9 @@ public class AudioController {
 
     @PostMapping("/upload")
     public ResponseEntity<AudioUploadResponse> uploadAudio(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("userId") Long userId
+            @RequestParam("file") MultipartFile file
     ) {
-        Long audioFileId = audioFileService.uploadAudioFile(file, userId);
+        Long audioFileId = audioFileService.uploadAudioFile(file);
 
         AudioUploadResponse response = AudioUploadResponse.builder()
                 .success(true)
@@ -37,10 +36,9 @@ public class AudioController {
 
     @PostMapping("/{audioFileId}/analyze")
     public ResponseEntity<AudioAnalysisStartResponse> analyzeAudio(
-            @PathVariable Long audioFileId,
-            @RequestParam Long userId
+            @PathVariable Long audioFileId
     ) {
-        Long analysisResultId = audioAnalysisService.analyzeAudio(audioFileId, userId);
+        Long analysisResultId = audioAnalysisService.analyzeAudio(audioFileId);
 
         AudioAnalysisStartResponse response = AudioAnalysisStartResponse.builder()
                 .success(true)
@@ -54,36 +52,31 @@ public class AudioController {
 
     @GetMapping("/{audioFileId}/result")
     public ResponseEntity<AudioAnalysisResponse> getAnalysisResult(
-            @PathVariable Long audioFileId,
-            @RequestParam Long userId
+            @PathVariable Long audioFileId
     ) {
-        AudioAnalysisResponse response = audioAnalysisService.getAnalysisResult(audioFileId, userId);
+        AudioAnalysisResponse response = audioAnalysisService.getAnalysisResult(audioFileId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{audioFileId}")
     public ResponseEntity<AudioFileInfoResponse> getAudioFileInfo(
-            @PathVariable Long audioFileId,
-            @RequestParam Long userId
+            @PathVariable Long audioFileId
     ) {
-        AudioFileInfoResponse response = audioFileService.getAudioFileInfo(audioFileId, userId);
+        AudioFileInfoResponse response = audioFileService.getAudioFileInfo(audioFileId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/list")
-    public ResponseEntity<List<AudioFileInfoResponse>> getUserAudioFiles(
-            @RequestParam Long userId
-    ) {
-        List<AudioFileInfoResponse> responses = audioFileService.getUserAudioFiles(userId);
+    public ResponseEntity<List<AudioFileInfoResponse>> getAllAudioFiles() {
+        List<AudioFileInfoResponse> responses = audioFileService.getAllAudioFiles();
         return ResponseEntity.ok(responses);
     }
 
     @DeleteMapping("/{audioFileId}")
     public ResponseEntity<AudioDeleteResponse> deleteAudioFile(
-            @PathVariable Long audioFileId,
-            @RequestParam Long userId
+            @PathVariable Long audioFileId
     ) {
-        audioFileService.deleteAudioFile(audioFileId, userId);
+        audioFileService.deleteAudioFile(audioFileId);
 
         AudioDeleteResponse response = AudioDeleteResponse.builder()
                 .success(true)

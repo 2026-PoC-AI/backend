@@ -2,6 +2,7 @@ package fakehunters.backend.audio.service;
 
 import fakehunters.backend.audio.domain.*;
 import fakehunters.backend.audio.dto.response.AudioAnalysisResponse;
+import fakehunters.backend.audio.dto.response.FastApiAudioResponse;
 import fakehunters.backend.audio.exception.AudioErrorCode;
 import fakehunters.backend.audio.mapper.*;
 import fakehunters.backend.global.exception.custom.CustomBusinessException;
@@ -9,9 +10,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -21,50 +28,91 @@ public class AudioAnalysisService {
     private final AudioAnalysisResultMapper audioAnalysisResultMapper;
     private final AudioModelPredictionMapper audioModelPredictionMapper;
     private final AudioTimeSegmentAnalysisMapper audioTimeSegmentAnalysisMapper;
-    private final AudioFrequencyAnalysisMapper audioFrequencyAnalysisMapper;
     private final AudioDetectionIndicatorMapper audioDetectionIndicatorMapper;
     private final AudioSpectrogramHeatmapMapper audioSpectrogramHeatmapMapper;
     private final AudioFileService audioFileService;
+    private final AudioFastApiClient fastApiClient;
 
     @Transactional
-    public Long analyzeAudio(Long audioFileId, Long userId) {
-        AudioFile audioFile = audioFileMapper.findByIdAndUserId(audioFileId, userId)
+    public Long analyzeAudio(Long audioFileId) {
+        AudioFile audioFile = audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
         audioFileService.updateStatus(audioFileId, "processing");
 
         try {
-            // TODO: ML 모델 호출
+            // FastAPI 호출
+            log.info("1. FastAPI 호출 시작");
+            FastApiAudioResponse fastApiResult = fastApiClient.analyzeAudio(audioFile.getFilePath());
+            log.info("2. FastAPI 응답 받음: {}", fastApiResult);
 
-            AudioAnalysisResult result = createDummyAnalysisResult(audioFileId);
+            // 분석 결과 저장
+            log.info("3. 분석 결과 생성 시작");
+            AudioAnalysisResult result = createAnalysisResultFromFastApi(audioFileId, fastApiResult);
+            log.info("4. 분석 결과 생성 완료");
+
             audioAnalysisResultMapper.insert(result);
+            log.info("5. 분석 결과 INSERT 완료: analysisResultId={}", result.getId());
 
             Long analysisResultId = result.getId();
 
-            List<AudioModelPrediction> predictions = createDummyModelPredictions(analysisResultId);
+            // 모델 예측 저장
+            log.info("6. 모델 예측 생성 시작");
+            List<AudioModelPrediction> predictions = createModelPredictionsFromFastApi(
+                    analysisResultId,
+                    fastApiResult
+            );
+            log.info("7. 모델 예측 생성 완료: count={}", predictions.size());
+
             audioModelPredictionMapper.insertBatch(predictions);
+            log.info("8. 모델 예측 INSERT 완료");
 
-            List<AudioTimeSegmentAnalysis> segments = createDummyTimeSegments(analysisResultId);
-            audioTimeSegmentAnalysisMapper.insertBatch(segments);
+            // 시간 구간 분석 저장
+            log.info("9. 시간 구간 분석 생성 시작");
+            List<AudioTimeSegmentAnalysis> segments = createTimeSegmentsFromFastApi(
+                    analysisResultId,
+                    fastApiResult
+            );
+            log.info("10. 시간 구간 분석 생성 완료: count={}", segments.size());
 
-            List<AudioDetectionIndicator> indicators = createDummyIndicators(analysisResultId);
-            audioDetectionIndicatorMapper.insertBatch(indicators);
+            if (!segments.isEmpty()) {
+                log.info("11. 시간 구간 분석 INSERT 시작");
+                audioTimeSegmentAnalysisMapper.insertBatch(segments);
+                log.info("12. 시간 구간 분석 INSERT 완료");
+            }
+
+            // 탐지 지표 저장
+            log.info("13. 탐지 지표 생성 시작");
+            List<AudioDetectionIndicator> indicators = createIndicatorsFromFastApi(
+                    analysisResultId,
+                    fastApiResult
+            );
+            log.info("14. 탐지 지표 생성 완료: count={}", indicators.size());
+
+            if (!indicators.isEmpty()) {
+                log.info("15. 탐지 지표 INSERT 시작");
+                audioDetectionIndicatorMapper.insertBatch(indicators);
+                log.info("16. 탐지 지표 INSERT 완료");
+            }
 
             audioFileService.updateStatus(audioFileId, "completed");
+            log.info("17. 분석 완료: analysisResultId={}", analysisResultId);
 
             return analysisResultId;
 
         } catch (CustomBusinessException e) {
+            log.error("CustomBusinessException 발생", e);
             audioFileService.updateStatus(audioFileId, "failed");
             throw e;
         } catch (Exception e) {
+            log.error("예상치 못한 에러 발생", e);
             audioFileService.updateStatus(audioFileId, "failed");
             throw new CustomBusinessException(AudioErrorCode.DETECTION_FAILED);
         }
     }
 
-    public AudioAnalysisResponse getAnalysisResult(Long audioFileId, Long userId) {
-        audioFileMapper.findByIdAndUserId(audioFileId, userId)
+    public AudioAnalysisResponse getAnalysisResult(Long audioFileId) {
+        audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
         AudioAnalysisResult result = audioAnalysisResultMapper.findByAudioFileId(audioFileId)
@@ -92,6 +140,101 @@ public class AudioAnalysisService {
                 .reasons(toDetectionReasons(indicators))
                 .heatmaps(toHeatmapInfos(heatmaps))
                 .build();
+    }
+
+    // FastAPI 결과를 DB 엔티티로 변환
+    private AudioAnalysisResult createAnalysisResultFromFastApi(
+            Long audioFileId,
+            FastApiAudioResponse fastApiResult
+    ) {
+        return AudioAnalysisResult.builder()
+                .audioFileId(audioFileId)
+                .prediction(fastApiResult.getPrediction())
+                .confidence(fastApiResult.getConfidence())
+                .realProbability(fastApiResult.getProbabilities().get("real"))
+                .fakeProbability(fastApiResult.getProbabilities().get("fake"))
+                .suspectedMethod(fastApiResult.getSuspectedMethod())
+                .methodConfidence(fastApiResult.getMethodConfidence())
+                .processingTime(fastApiResult.getProcessingTime())
+                .modelVersion(fastApiResult.getModelVersion())
+                .build();
+    }
+
+    private List<AudioModelPrediction> createModelPredictionsFromFastApi(
+            Long analysisResultId,
+            FastApiAudioResponse fastApiResult
+    ) {
+        List<AudioModelPrediction> predictions = new ArrayList<>();
+
+        Map<String, Map<String, BigDecimal>> modelOutputs = fastApiResult.getModelOutputs();
+
+        if (modelOutputs != null) {
+            modelOutputs.forEach((modelName, probs) -> {
+                BigDecimal realProb = probs.get("real");
+                BigDecimal fakeProb = probs.get("fake");
+
+                predictions.add(AudioModelPrediction.builder()
+                        .analysisResultId(analysisResultId)
+                        .modelName(modelName)
+                        .modelType(modelName.equals("mel") ? "spectrogram" : "frequency")
+                        .realProbability(realProb)
+                        .fakeProbability(fakeProb)
+                        .prediction(fakeProb.compareTo(realProb) > 0 ? "fake" : "real")
+                        .confidence(fakeProb.max(realProb))
+                        .build());
+            });
+        }
+
+        return predictions;
+    }
+
+    private List<AudioTimeSegmentAnalysis> createTimeSegmentsFromFastApi(
+            Long analysisResultId,
+            FastApiAudioResponse fastApiResult
+    ) {
+        List<AudioTimeSegmentAnalysis> segments = new ArrayList<>();
+
+        List<FastApiAudioResponse.TimeSegment> timeSegments = fastApiResult.getTimeSegments();
+
+        if (timeSegments != null) {
+            timeSegments.forEach(segment -> {
+                segments.add(AudioTimeSegmentAnalysis.builder()
+                        .analysisResultId(analysisResultId)
+                        .startTime(segment.getStart())
+                        .endTime(segment.getEnd())
+                        .riskLevel(segment.getRisk())
+                        .riskScore(segment.getRisk().equals("high") ?
+                                new BigDecimal("0.9") : new BigDecimal("0.5"))
+                        .reason(segment.getReason())
+                        .indicators(List.of(segment.getReason()))
+                        .build());
+            });
+        }
+
+        return segments;
+    }
+
+    private List<AudioDetectionIndicator> createIndicatorsFromFastApi(
+            Long analysisResultId,
+            FastApiAudioResponse fastApiResult
+    ) {
+        List<AudioDetectionIndicator> indicators = new ArrayList<>();
+
+        List<String> suspiciousPatterns = fastApiResult.getSuspiciousPatterns();
+
+        if (suspiciousPatterns != null) {
+            suspiciousPatterns.forEach(pattern -> {
+                indicators.add(AudioDetectionIndicator.builder()
+                        .analysisResultId(analysisResultId)
+                        .indicatorType("pattern")
+                        .description(pattern)
+                        .severity("high")
+                        .confidence(fastApiResult.getConfidence())
+                        .build());
+            });
+        }
+
+        return indicators;
     }
 
     private List<AudioAnalysisResponse.ModelVote> toModelVotes(List<AudioModelPrediction> predictions) {
@@ -139,71 +282,5 @@ public class AudioAnalysisService {
                         .heatmapType(h.getHeatmapType())
                         .build())
                 .collect(Collectors.toList());
-    }
-
-    // 더미 데이터 생성 메서드들
-    private AudioAnalysisResult createDummyAnalysisResult(Long audioFileId) {
-        return AudioAnalysisResult.builder()
-                .audioFileId(audioFileId)
-                .prediction("fake")
-                .confidence(new java.math.BigDecimal("0.9234"))
-                .realProbability(new java.math.BigDecimal("0.0766"))
-                .fakeProbability(new java.math.BigDecimal("0.9234"))
-                .suspectedMethod("TTS")
-                .methodConfidence(new java.math.BigDecimal("0.78"))
-                .processingTime(new java.math.BigDecimal("2.5"))
-                .modelVersion("v1.0.0")
-                .build();
-    }
-
-    private List<AudioModelPrediction> createDummyModelPredictions(Long analysisResultId) {
-        return List.of(
-                AudioModelPrediction.builder()
-                        .analysisResultId(analysisResultId)
-                        .modelName("mel_cnn")
-                        .modelType("spectrogram")
-                        .realProbability(new java.math.BigDecimal("0.08"))
-                        .fakeProbability(new java.math.BigDecimal("0.92"))
-                        .prediction("fake")
-                        .confidence(new java.math.BigDecimal("0.92"))
-                        .build(),
-                AudioModelPrediction.builder()
-                        .analysisResultId(analysisResultId)
-                        .modelName("lfcc_cnn")
-                        .modelType("frequency")
-                        .realProbability(new java.math.BigDecimal("0.12"))
-                        .fakeProbability(new java.math.BigDecimal("0.88"))
-                        .prediction("fake")
-                        .confidence(new java.math.BigDecimal("0.88"))
-                        .build()
-        );
-    }
-
-    private List<AudioTimeSegmentAnalysis> createDummyTimeSegments(Long analysisResultId) {
-        return List.of(
-                AudioTimeSegmentAnalysis.builder()
-                        .analysisResultId(analysisResultId)
-                        .startTime(new java.math.BigDecimal("0.5"))
-                        .endTime(new java.math.BigDecimal("1.2"))
-                        .riskLevel("high")
-                        .riskScore(new java.math.BigDecimal("0.95"))
-                        .reason("합성 음성 특징")
-                        .indicators(List.of("비자연스러운 고주파", "위상 불일치"))
-                        .build()
-        );
-    }
-
-    private List<AudioDetectionIndicator> createDummyIndicators(Long analysisResultId) {
-        return List.of(
-                AudioDetectionIndicator.builder()
-                        .analysisResultId(analysisResultId)
-                        .indicatorType("frequency")
-                        .description("비자연스러운 고주파 패턴 감지")
-                        .severity("critical")
-                        .confidence(new java.math.BigDecimal("0.89"))
-                        .timeStart(new java.math.BigDecimal("0.5"))
-                        .timeEnd(new java.math.BigDecimal("1.2"))
-                        .build()
-        );
     }
 }

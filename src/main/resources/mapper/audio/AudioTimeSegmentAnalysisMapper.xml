@@ -29,12 +29,14 @@
 
     <insert id="insertBatch">
         INSERT INTO audio_time_segment_analysis (
-        analysis_result_id, start_time, end_time, risk_level, risk_score, reason, indicators, created_at
+        analysis_result_id, start_time, end_time, risk_level, risk_score,
+        reason, indicators, created_at
         ) VALUES
-        <foreach collection="segments" item="item" separator=",">
-            (#{item.analysisResultId}, #{item.startTime}, #{item.endTime}, #{item.riskLevel},
-            #{item.riskScore}, #{item.reason},
-            #{item.indicators, typeHandler=fakehunters.backend.global.mybatis.JsonNodeTypeHandler}::jsonb, NOW())
+        <foreach collection="list" item="item" separator=",">
+            (#{item.analysisResultId}, #{item.startTime}, #{item.endTime},
+            #{item.riskLevel}, #{item.riskScore}, #{item.reason},
+            #{item.indicators, typeHandler=fakehunters.backend.global.mybatis.StringListTypeHandler}::jsonb,
+            NOW())
         </foreach>
     </insert>
 

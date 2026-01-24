@@ -10,7 +10,7 @@ public interface AudioTimeSegmentAnalysisMapper {
 
     void insert(AudioTimeSegmentAnalysis segment);
 
-    void insertBatch(@Param("segments") List<AudioTimeSegmentAnalysis> segments);
+    void insertBatch(@Param("list") List<AudioTimeSegmentAnalysis> segments);
 
     List<AudioTimeSegmentAnalysis> findByAnalysisResultIdOrderByStartTimeAsc(
             @Param("analysisResultId") Long analysisResultId
