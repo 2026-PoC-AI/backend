@@ -1,12 +1,12 @@
 package fakehunters.backend.audio.controller;
 
+import fakehunters.backend.audio.dto.request.AudioUploadRequest;
 import fakehunters.backend.audio.dto.response.*;
 import fakehunters.backend.audio.service.AudioAnalysisService;
 import fakehunters.backend.audio.service.AudioFileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,20 +18,28 @@ public class AudioController {
     private final AudioFileService audioFileService;
     private final AudioAnalysisService audioAnalysisService;
 
+    /**
+     * Presigned 업로드 완료 후 DB 등록
+     */
     @PostMapping("/upload")
     public ResponseEntity<AudioUploadResponse> uploadAudio(
-            @RequestParam("file") MultipartFile file
+            @RequestBody AudioUploadRequest request
     ) {
-        Long audioFileId = audioFileService.uploadAudioFile(file);
+        Long audioFileId =
+                audioFileService.uploadAudioFile(
+                        request.getS3Key(),
+                        request.getFileName(),
+                        request.getFileSize()
+                );
 
-        AudioUploadResponse response = AudioUploadResponse.builder()
-                .success(true)
-                .audioFileId(audioFileId)
-                .fileName(file.getOriginalFilename())
-                .message("파일 업로드 성공")
-                .build();
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                AudioUploadResponse.builder()
+                        .success(true)
+                        .audioFileId(audioFileId)
+                        .fileName(request.getFileName())
+                        .message("파일 업로드 성공")
+                        .build()
+        );
     }
 
     @PostMapping("/{audioFileId}/analyze")
@@ -40,36 +48,39 @@ public class AudioController {
     ) {
         Long analysisResultId = audioAnalysisService.analyzeAudio(audioFileId);
 
-        AudioAnalysisStartResponse response = AudioAnalysisStartResponse.builder()
-                .success(true)
-                .analysisResultId(analysisResultId)
-                .status("processing")
-                .message("분석 시작")
-                .build();
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                AudioAnalysisStartResponse.builder()
+                        .success(true)
+                        .analysisResultId(analysisResultId)
+                        .status("processing")
+                        .message("분석 시작")
+                        .build()
+        );
     }
 
     @GetMapping("/{audioFileId}/result")
     public ResponseEntity<AudioAnalysisResponse> getAnalysisResult(
             @PathVariable Long audioFileId
     ) {
-        AudioAnalysisResponse response = audioAnalysisService.getAnalysisResult(audioFileId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                audioAnalysisService.getAnalysisResult(audioFileId)
+        );
     }
 
     @GetMapping("/{audioFileId}")
     public ResponseEntity<AudioFileInfoResponse> getAudioFileInfo(
             @PathVariable Long audioFileId
     ) {
-        AudioFileInfoResponse response = audioFileService.getAudioFileInfo(audioFileId);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                audioFileService.getAudioFileInfo(audioFileId)
+        );
     }
 
     @GetMapping("/list")
     public ResponseEntity<List<AudioFileInfoResponse>> getAllAudioFiles() {
-        List<AudioFileInfoResponse> responses = audioFileService.getAllAudioFiles();
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(
+                audioFileService.getAllAudioFiles()
+        );
     }
 
     @DeleteMapping("/{audioFileId}")
@@ -78,11 +89,11 @@ public class AudioController {
     ) {
         audioFileService.deleteAudioFile(audioFileId);
 
-        AudioDeleteResponse response = AudioDeleteResponse.builder()
-                .success(true)
-                .message("파일 삭제 성공")
-                .build();
-
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(
+                AudioDeleteResponse.builder()
+                        .success(true)
+                        .message("파일 삭제 성공")
+                        .build()
+        );
     }
 }
