@@ -29,7 +29,11 @@ public enum AudioErrorCode implements ErrorCode {
     // 오디오 처리 오류
     UPLOAD_ERROR("AUDIO010", "오디오 업로드 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     PROCESSING_ERROR("AUDIO011", "오디오 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
-    DELETE_ERROR("AUDIO012", "오디오 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    DELETE_ERROR("AUDIO012", "오디오 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // AI 서버 연동 관련
+    AI_SERVER_ERROR("AUDIO013", "AI 서버 연결에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE),
+    FILE_READ_ERROR("AUDIO014", "파일 읽기에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
     private final String message;

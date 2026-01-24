@@ -7,6 +7,7 @@ import fakehunters.backend.audio.mapper.AudioFileMapper;
 import fakehunters.backend.audio.mapper.AudioAnalysisResultMapper;
 import fakehunters.backend.global.exception.custom.CustomBusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -24,15 +26,20 @@ public class AudioFileService {
     private final AudioStorageService audioStorageService;
 
     @Transactional
-    public Long uploadAudioFile(MultipartFile file, Long userId) {
+    public Long uploadAudioFile(MultipartFile file) {
         validateAudioFile(file);
 
         try {
-            String filePath = audioStorageService.uploadFile(file, userId);
+            log.info("=== 파일 업로드 시작: {} ===", file.getOriginalFilename());
+
+            String filePath = audioStorageService.uploadFile(file);
+            log.info("1. S3 업로드 완료: {}", filePath);
+
             AudioStorageService.AudioMetadata metadata = audioStorageService.extractMetadata(file);
+            log.info("2. 메타데이터 추출 완료: duration={}, sampleRate={}",
+                    metadata.getDuration(), metadata.getSampleRate());
 
             AudioFile audioFile = AudioFile.builder()
-                    .userId(userId)
                     .fileName(file.getOriginalFilename())
                     .filePath(filePath)
                     .fileSize(file.getSize())
@@ -40,19 +47,33 @@ public class AudioFileService {
                     .sampleRate(metadata.getSampleRate())
                     .build();
 
-            audioFileMapper.insert(audioFile);
+            log.info("3. AudioFile 객체 생성 완료");
 
-            return audioFile.getId();
+            audioFileMapper.insert(audioFile);
+            log.info("4. DB INSERT 완료");
+
+            Long generatedId = audioFile.getId();
+            log.info("5. 생성된 ID: {}", generatedId);
+
+            if (generatedId == null) {
+                log.error("생성된 ID가 null입니다!");
+                throw new CustomBusinessException(AudioErrorCode.UPLOAD_ERROR);
+            }
+
+            log.info("=== 파일 업로드 성공: audioFileId={} ===", generatedId);
+            return generatedId;
 
         } catch (CustomBusinessException e) {
+            log.error("CustomBusinessException 발생: {}", e.getMessage(), e);
             throw e;
         } catch (Exception e) {
+            log.error("예상치 못한 에러 발생", e);
             throw new CustomBusinessException(AudioErrorCode.UPLOAD_ERROR);
         }
     }
 
-    public AudioFileInfoResponse getAudioFileInfo(Long audioFileId, Long userId) {
-        AudioFile audioFile = audioFileMapper.findByIdAndUserId(audioFileId, userId)
+    public AudioFileInfoResponse getAudioFileInfo(Long audioFileId) {
+        AudioFile audioFile = audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
         boolean hasAnalysis = audioAnalysisResultMapper.existsByAudioFileId(audioFileId);
@@ -69,8 +90,8 @@ public class AudioFileService {
                 .build();
     }
 
-    public List<AudioFileInfoResponse> getUserAudioFiles(Long userId) {
-        List<AudioFile> audioFiles = audioFileMapper.findByUserIdOrderByCreatedAtDesc(userId);
+    public List<AudioFileInfoResponse> getAllAudioFiles() {
+        List<AudioFile> audioFiles = audioFileMapper.findAllOrderByCreatedAtDesc();
 
         return audioFiles.stream()
                 .map(audioFile -> {
@@ -95,8 +116,8 @@ public class AudioFileService {
     }
 
     @Transactional
-    public void deleteAudioFile(Long audioFileId, Long userId) {
-        AudioFile audioFile = audioFileMapper.findByIdAndUserId(audioFileId, userId)
+    public void deleteAudioFile(Long audioFileId) {
+        AudioFile audioFile = audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
         try {

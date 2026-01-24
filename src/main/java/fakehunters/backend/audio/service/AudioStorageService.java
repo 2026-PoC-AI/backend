@@ -24,9 +24,9 @@ public class AudioStorageService {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
-    public String uploadFile(MultipartFile file, Long userId) {
-        String fileName = generateFileName(file.getOriginalFilename(), userId);
-        String key = "audio/" + userId + "/" + fileName;
+    public String uploadFile(MultipartFile file) {
+        String fileName = generateFileName(file.getOriginalFilename());
+        String key = "audio/" + fileName;
 
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
@@ -68,7 +68,7 @@ public class AudioStorageService {
         );
     }
 
-    private String generateFileName(String originalFilename, Long userId) {
+    private String generateFileName(String originalFilename) {
         String extension = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf("."));

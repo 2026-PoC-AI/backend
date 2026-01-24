@@ -1,16 +1,18 @@
 package fakehunters.backend.audio.domain;
 
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Getter
 @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class AudioFile {
 
     private Long id;
-    private Long userId;
     private String fileName;
     private String filePath;
     private Long fileSize;
