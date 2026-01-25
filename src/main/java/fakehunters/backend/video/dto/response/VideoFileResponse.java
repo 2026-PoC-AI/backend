@@ -21,5 +21,5 @@ public class VideoFileResponse {
     private String resolution;
     private String format;
     private BigDecimal fps;
-    private LocalDateTime uploadedAt;
+    private OffsetDateTime uploadedAt;
 }

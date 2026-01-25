@@ -60,8 +60,7 @@ public class VideoFileService {
                 .resolution(file.getResolution())
                 .format(file.getFormat())
                 .fps(file.getFps())
-                // 핵심: OffsetDateTime을 LocalDateTime으로 변환하여 DTO에 전달
-                .uploadedAt(file.getUploadedAt() != null ? file.getUploadedAt().toLocalDateTime() : null)
+                .uploadedAt(file.getUploadedAt())
                 .build();
     }
 }

@@ -1,5 +1,6 @@
 package fakehunters.backend.video.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fakehunters.backend.global.exception.custom.CustomSystemException;
 import fakehunters.backend.video.domain.*;
 import fakehunters.backend.video.dto.response.*;
@@ -8,7 +9,10 @@ import fakehunters.backend.video.mapper.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,6 +41,9 @@ public class VideoAnalysisService {
     private final VideoFileMapper videoFileMapper;
     private final AnalysisResultMapper analysisResultMapper;
     private final FrameAnalysisMapper frameAnalysisMapper;
+    private final ReactiveRedisTemplate<String, String> redisTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${file.upload.path:/uploads/videos}")
     private String uploadPath;
@@ -55,20 +62,16 @@ public class VideoAnalysisService {
         VideoAnalysis videoAnalysis = VideoAnalysis.builder()
                 .title(file.getOriginalFilename())
                 .status("PENDING")
-                .createdAt(LocalDateTime.now())
+                .createdAt(OffsetDateTime.now())
                 .build();
 
         videoAnalysisMapper.insert(videoAnalysis);
         Long analysisId = videoAnalysis.getAnalysisId();
 
+        // 원본 파일만 먼저 저장 (FFmpeg 변환은 나중에)
         String storedFilename;
-        String webFilename = null;
         try {
             storedFilename = saveFile(file, analysisId.toString());
-
-            String originalPath = uploadPath + "/" + storedFilename;
-            webFilename = convertToWebFormat(originalPath, analysisId.toString());
-
         } catch (IOException e) {
             log.error("파일 저장 실패", e);
             throw new CustomSystemException(VideoErrorCode.UPLOAD_ERROR);
@@ -79,7 +82,7 @@ public class VideoAnalysisService {
                 .originalFilename(file.getOriginalFilename())
                 .storedFilename(storedFilename)
                 .filePath(uploadPath + "/" + storedFilename)
-                .webFilePath(webFilename != null ? uploadPath + "/" + webFilename : uploadPath + "/" + storedFilename)
+                .webFilePath(uploadPath + "/" + storedFilename) // 일단 원본 경로
                 .fileSize(file.getSize())
                 .format(getFileExtension(file.getOriginalFilename()))
                 .uploadedAt(OffsetDateTime.now())
@@ -88,24 +91,103 @@ public class VideoAnalysisService {
 
         videoAnalysisMapper.updateStatus(analysisId, "PROCESSING");
 
-        MultipartBodyBuilder builder = new MultipartBodyBuilder();
-        builder.part("file", file.getResource());
-        builder.part("analysis_id", analysisId);
+        // Redis 초기 상태
+        VideoProgressResponse initialProgress = VideoProgressResponse.builder()
+                .progress(0)
+                .stage("video_upload")
+                .detail("분석을 준비 중입니다.")
+                .build();
 
-        return aiServiceWebClient.post()
-                .uri("/api/v1/video/analyze")
-                .body(BodyInserters.fromMultipartData(builder.build()))
-                .retrieve()
-                .bodyToMono(VideoAnalysisResponse.class)
-                .doOnNext(response -> {
-                    saveAnalysisResultInternal(analysisId, response);
-                    videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
-                    videoAnalysisMapper.updateCompletedAt(analysisId);
+        String json;
+        try {
+            json = objectMapper.writeValueAsString(initialProgress);
+        } catch (Exception e) {
+            log.error("JSON 직렬화 실패", e);
+            throw new CustomSystemException(VideoErrorCode.INTERNAL_SERVER_ERROR);
+        }
+
+        String key = "video_analysis_progress:" + analysisId;
+
+        return redisTemplate.opsForValue()
+                .set(key, json, java.time.Duration.ofHours(1))
+                .doOnSuccess(result -> {
+                    log.info("Redis 초기 상태 저장 완료 - Key: {}", key);
+                    // FFmpeg 변환과 AI 분석을 백그라운드에서 실행
+                    processVideoWithConversionAsync(file, analysisId, storedFilename);
                 })
-                .doOnError(e -> {
-                    log.error("AI 서비스 호출 실패", e);
-                    videoAnalysisMapper.updateStatus(analysisId, "FAILED");
-                });
+                .doOnError(e -> log.error("Redis 초기 상태 저장 실패 - Key: {}", key, e))
+                .thenReturn(VideoAnalysisResponse.builder()
+                        .analysisId(analysisId)
+                        .title(file.getOriginalFilename())
+                        .status("PROCESSING")
+                        .createdAt(videoAnalysis.getCreatedAt())
+                        .videoFile(convertToFileResponse(videoFile))
+                        .build());
+    }
+
+    @Async
+    public void processVideoWithConversionAsync(MultipartFile file, Long analysisId, String storedFilename) {
+        log.info("백그라운드 처리 시작 - ID: {}, FFmpeg 변환 포함", analysisId);
+
+        try {
+            // FFmpeg 변환 (백그라운드에서)
+            String originalPath = uploadPath + "/" + storedFilename;
+            String webFilename = convertToWebFormat(originalPath, analysisId.toString());
+
+            // VideoFile 업데이트 (web 파일 경로)
+            if (webFilename != null) {
+                String webFilePath = uploadPath + "/" + webFilename;
+                videoFileMapper.updateWebFilePath(analysisId, webFilePath);
+                log.info("Web 파일 경로 업데이트 완료 - ID: {}, Path: {}", analysisId, webFilePath);
+            }
+
+            // AI 분석 시작
+            processVideoAnalysisAsync(analysisId, storedFilename);
+
+        } catch (Exception e) {
+            log.error("백그라운드 처리 실패 - ID: {}", analysisId, e);
+            videoAnalysisMapper.updateStatus(analysisId, "FAILED");
+        }
+    }
+
+    @Async
+    public void processVideoAnalysisAsync(Long analysisId, String storedFilename) {
+        log.info("AI 분석 시작 - ID: {}", analysisId);
+
+        try {
+            // 저장된 파일을 다시 읽기
+            Path filePath = Paths.get(uploadPath, storedFilename);
+            byte[] fileBytes = Files.readAllBytes(filePath);
+
+            MultipartBodyBuilder builder = new MultipartBodyBuilder();
+            builder.part("file", new ByteArrayResource(fileBytes) {
+                @Override
+                public String getFilename() {
+                    return storedFilename;
+                }
+            });
+            builder.part("analysis_id", analysisId);
+
+            aiServiceWebClient.post()
+                    .uri("/api/v1/video/analyze")
+                    .body(BodyInserters.fromMultipartData(builder.build()))
+                    .retrieve()
+                    .bodyToMono(VideoAnalysisResponse.class)
+                    .doOnNext(response -> {
+                        log.info("AI 분석 완료 - ID: {}", analysisId);
+                        saveAnalysisResultInternal(analysisId, response);
+                        videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
+                        videoAnalysisMapper.updateCompletedAt(analysisId);
+                    })
+                    .doOnError(e -> {
+                        log.error("AI 서비스 호출 실패 - ID: {}", analysisId, e);
+                        videoAnalysisMapper.updateStatus(analysisId, "FAILED");
+                    })
+                    .subscribe();
+        } catch (Exception e) {
+            log.error("백그라운드 분석 실패 - ID: {}", analysisId, e);
+            videoAnalysisMapper.updateStatus(analysisId, "FAILED");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +224,33 @@ public class VideoAnalysisService {
                 .build());
     }
 
+    public Mono<VideoProgressResponse> getAnalysisProgress(Long analysisId) {
+        String key = "video_analysis_progress:" + analysisId;
+
+        log.info("🔍 Redis 조회 - Key: {}", key);
+
+        return redisTemplate.opsForValue()
+                .get(key)
+                .doOnNext(json -> {
+                    log.info("✅ Redis 원본 데이터: {}", json);
+                })
+                .map(json -> {
+                    try {
+                        VideoProgressResponse response = objectMapper.readValue(json, VideoProgressResponse.class);
+                        log.info("✅ 파싱 성공: progress={}, stage={}",
+                                response.getProgress(), response.getProgress());
+                        return response;
+                    } catch (Exception e) {
+                        log.error("❌ JSON 파싱 실패: {}", json, e);
+                        return null;
+                    }
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("⚠️ Redis에 데이터 없음 - Key: {}", key);
+                    return Mono.empty();
+                }));
+    }
+
     private void saveAnalysisResultInternal(Long analysisId, VideoAnalysisResponse response) {
         try {
             AnalysisResult result = AnalysisResult.builder()
@@ -152,7 +261,7 @@ public class VideoAnalysisService {
                     .processingTimeMs(response.getAnalysisResult().getProcessingTimeMs())
                     .detectedTechniques(response.getAnalysisResult().getDetectedTechniques())
                     .summary(response.getAnalysisResult().getSummary())
-                    .analyzedAt(LocalDateTime.now())
+                    .analyzedAt(OffsetDateTime.now())
                     .build();
 
             analysisResultMapper.insert(result);
@@ -201,16 +310,15 @@ public class VideoAnalysisService {
             log.info("출력 파일: {}", webPath);
 
             ProcessBuilder processBuilder = new ProcessBuilder(command);
-            processBuilder.redirectErrorStream(true); // stderr를 stdout으로 합침
+            processBuilder.redirectErrorStream(true);
 
             Process process = processBuilder.start();
 
-            // 출력 읽기
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    log.info("[FFmpeg] {}", line);
+                    log.debug("[FFmpeg] {}", line); // info -> debug로 변경 (로그 줄이기)
                 }
             }
 
@@ -263,7 +371,6 @@ public class VideoAnalysisService {
     private VideoFileResponse convertToFileResponse(VideoFile file) {
         if (file == null) return null;
 
-        // OffsetDateTime을 LocalDateTime으로 변환하여 DTO에 담기
         LocalDateTime localUploadedAt = (file.getUploadedAt() != null)
                 ? file.getUploadedAt().toLocalDateTime()
                 : null;
@@ -278,7 +385,7 @@ public class VideoAnalysisService {
                 .resolution(file.getResolution())
                 .format(file.getFormat())
                 .fps(file.getFps())
-                .uploadedAt(localUploadedAt) // // 변환된 값 세팅
+                .uploadedAt(file.getUploadedAt())
                 .analysisId(file.getAnalysisId())
                 .build();
     }

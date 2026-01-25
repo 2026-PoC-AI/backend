@@ -2,6 +2,7 @@ package fakehunters.backend.video.controller;
 
 import fakehunters.backend.video.domain.FrameAnalysis;
 import fakehunters.backend.video.dto.response.VideoAnalysisResponse;
+import fakehunters.backend.video.dto.response.VideoProgressResponse;
 import fakehunters.backend.video.mapper.FrameAnalysisMapper;
 import fakehunters.backend.video.mapper.VideoFileMapper;
 import fakehunters.backend.video.service.VideoAnalysisService;
@@ -66,9 +67,7 @@ public class VideoController {
                 });
     }
 
-    /**
-     * 브라우저 호환 비디오 파일 스트리밍
-     */
+    // 호환 비디오 파일 스트리밍
     @GetMapping("/files/{analysisId}")
     public ResponseEntity<Resource> getVideoFile(
             @PathVariable Long analysisId,
@@ -150,4 +149,25 @@ public class VideoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+
+    @GetMapping("/progress/{analysisId}")
+    public Mono<ResponseEntity<VideoProgressResponse>> getAnalysisProgress(
+            @PathVariable Long analysisId) {
+
+        log.info("========================================");
+        log.info("진행률 조회 요청 - ID: {}", analysisId);
+        log.info("========================================");
+
+        return videoAnalysisService.getAnalysisProgress(analysisId)
+                .map(response -> {
+                    log.info("✅ 진행률 응답: {}", response);
+                    return ResponseEntity.ok(response);
+                })
+                .defaultIfEmpty(ResponseEntity.notFound().build())
+                .onErrorResume(e -> {
+                    log.error("❌ 진행률 조회 실패 - ID: {}", analysisId, e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
+                });
+    }
+
 }

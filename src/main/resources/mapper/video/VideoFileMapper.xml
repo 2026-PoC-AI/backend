@@ -82,4 +82,10 @@
         WHERE analysis_id = #{analysisId}
     </select>
 
+    <update id="updateWebFilePath">
+        UPDATE video_analysis_input
+        SET web_file_path = #{webFilePath}
+        WHERE analysis_id = #{analysisId}
+    </update>
+
 </mapper>
