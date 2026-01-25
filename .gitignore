@@ -73,6 +73,7 @@ modules.xml
 .idea/usage.statistics.xml
 .idea/dictionaries
 .idea/shelf
+.idea/vcs.xml
 
 # IntelliJ IDEA Rider
 .idea/.idea.*.dir/config/applicationhost.config
