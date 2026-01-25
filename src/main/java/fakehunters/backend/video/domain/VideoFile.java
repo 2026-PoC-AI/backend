@@ -22,7 +22,7 @@ public class VideoFile {
     private String filePath;
     private String webFilePath;
     private Long fileSize;
-    private BigDecimal durationSeconds;
+    private Double durationSeconds;
     private String resolution;
     private String format;
     private BigDecimal fps;

@@ -6,6 +6,7 @@ import fakehunters.backend.global.exception.error.GlobalErrorCode;
 import fakehunters.backend.global.exception.response.ErrorResponse;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.context.support.DefaultMessageSourceResolvable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
@@ -86,13 +88,23 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("ILLEGAL_ARGUMENT", e.getMessage()));
     }
 
-    // 예상하지 못한 모든 예외 처리
+    // 클라이언트 연결 중단 예외 처리 - 비디오 스트리밍 중 정상적으로 발생 가능
+    @ExceptionHandler({
+            ClientAbortException.class,
+            AsyncRequestNotUsableException.class
+    })
+    public void handleClientAbortException(Exception e) {
+        log.debug("Client disconnected: {}", e.getMessage());
+        // 응답하지 않음 - 클라이언트가 이미 연결을 끊었기 때문
+    }
+
+    // 예상치 못한 예외 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
         log.error("Unexpected Exception: {}", e.getMessage(), e);
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.from(GlobalErrorCode.INTERNAL_ERROR));
+                .body(ErrorResponse.from(GlobalErrorCode.INTERNAL_SERVER_ERROR));
     }
 }

@@ -32,9 +32,10 @@ public enum GlobalErrorCode implements ErrorCode {
     // 500 Internal Server Error
     INTERNAL_ERROR("G009", "서버 내부 오류입니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     DATABASE_ERROR("G010", "데이터베이스 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+    INTERNAL_SERVER_ERROR("G011", "비디오 스트리밍 에러가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // 503 Service Unavailable
-    SERVICE_UNAVAILABLE("G011", "현재 서비스를 이용할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+    SERVICE_UNAVAILABLE("G012", "현재 서비스를 이용할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
 
     private final String code;
     private final String message;

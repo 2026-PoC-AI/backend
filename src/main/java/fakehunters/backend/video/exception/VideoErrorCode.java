@@ -32,7 +32,10 @@ public enum VideoErrorCode implements ErrorCode {
     UPLOAD_ERROR("VIDEO012", "비디오 업로드 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     PROCESSING_ERROR("VIDEO013", "비디오 처리 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
     ENCODING_ERROR("VIDEO014", "비디오 인코딩 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
-    DELETE_ERROR("VIDEO015", "비디오 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    DELETE_ERROR("VIDEO015", "비디오 삭제 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // 폴링
+    INTERNAL_SERVER_ERROR("VIDEO016", "폴링 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
     private final String message;

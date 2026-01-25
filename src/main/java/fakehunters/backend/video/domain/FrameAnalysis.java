@@ -2,17 +2,16 @@ package fakehunters.backend.video.domain;
 
 import lombok.Builder;
 import lombok.Getter;
-import java.math.BigDecimal;
 
 @Getter
 @Builder
 public class FrameAnalysis {
     private Long frameId;
-    private Long resultId;        // FK
+    private Long resultId;
     private Integer frameNumber;
-    private BigDecimal timestampSeconds;
+    private Double timestampSeconds;
     private Boolean isDeepfake;
-    private BigDecimal confidenceScore;
+    private Double confidenceScore;
     private String anomalyRegions;
     private String features;
 }

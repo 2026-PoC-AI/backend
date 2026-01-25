@@ -1,14 +1,14 @@
 package fakehunters.backend.video.controller;
 
-import fakehunters.backend.video.domain.FrameAnalysis;
+import fakehunters.backend.video.domain.VideoFile;
 import fakehunters.backend.video.dto.response.VideoAnalysisResponse;
-import fakehunters.backend.video.mapper.FrameAnalysisMapper;
+import fakehunters.backend.video.dto.response.VideoProgressResponse;
 import fakehunters.backend.video.mapper.VideoFileMapper;
 import fakehunters.backend.video.service.VideoAnalysisService;
-import fakehunters.backend.video.domain.VideoFile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -19,9 +19,9 @@ import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-import org.springframework.core.io.ByteArrayResource;
-import java.io.RandomAccessFile;
+import java.io.InputStream;
 
 @Slf4j
 @RestController
@@ -31,7 +31,6 @@ public class VideoController {
 
     private final VideoAnalysisService videoAnalysisService;
     private final VideoFileMapper videoFileMapper;
-    private final FrameAnalysisMapper frameAnalysisMapper;
 
     @PostMapping("/analyze")
     public Mono<ResponseEntity<VideoAnalysisResponse>> analyzeVideo(
@@ -66,21 +65,16 @@ public class VideoController {
                 });
     }
 
-    /**
-     * 브라우저 호환 비디오 파일 스트리밍
-     */
     @GetMapping("/files/{analysisId}")
     public ResponseEntity<Resource> getVideoFile(
             @PathVariable Long analysisId,
-            @RequestHeader(value = "Range", required = false) String rangeHeader) throws IOException {
+            @RequestHeader(value = "Range", required = false) String rangeHeader) {
 
         try {
-            log.info("비디오 파일 요청 - Analysis ID: {}, Range: {}", analysisId, rangeHeader);
+            log.debug("비디오 파일 요청 - Analysis ID: {}, Range: {}", analysisId, rangeHeader);
 
             VideoFile videoFile = videoFileMapper.findByAnalysisId(analysisId);
-
             if (videoFile == null) {
-                log.error("VideoFile not found for analysisId: {}", analysisId);
                 return ResponseEntity.notFound().build();
             }
 
@@ -88,19 +82,15 @@ public class VideoController {
                     ? videoFile.getWebFilePath()
                     : videoFile.getFilePath();
 
-            log.info("파일 경로: {}", filePath);
-
             File file = new File(filePath);
-
             if (!file.exists()) {
-                log.error("파일이 존재하지 않음: {}", filePath);
                 return ResponseEntity.notFound().build();
             }
 
             long fileSize = file.length();
 
-            // Range 헤더가 없으면 전체 파일 반환
-            if (rangeHeader == null) {
+            // Range 헤더 없으면 전체 파일
+            if (rangeHeader == null || rangeHeader.isEmpty()) {
                 Resource resource = new FileSystemResource(file);
                 return ResponseEntity.ok()
                         .contentType(MediaType.parseMediaType("video/mp4"))
@@ -110,44 +100,97 @@ public class VideoController {
                         .body(resource);
             }
 
-            // Range 요청 처리
+            // Range 파싱
             String[] ranges = rangeHeader.replace("bytes=", "").split("-");
             long start = Long.parseLong(ranges[0]);
             long end = ranges.length > 1 && !ranges[1].isEmpty()
                     ? Long.parseLong(ranges[1])
                     : fileSize - 1;
 
-            // end가 파일 크기를 초과하지 않도록 보정
+            // 범위 검증
             if (end >= fileSize) {
                 end = fileSize - 1;
             }
 
-            long contentLength = end - start + 1;
-
-            log.info("Range 요청 처리 - start: {}, end: {}, contentLength: {}, fileSize: {}",
-                    start, end, contentLength, fileSize);
-
-            // ByteArrayResource 사용하여 정확한 범위 반환
-            try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
-                raf.seek(start);
-                byte[] buffer = new byte[(int) contentLength];
-                raf.readFully(buffer);
-
-                ByteArrayResource resource = new ByteArrayResource(buffer);
-
-                return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
-                        .contentType(MediaType.parseMediaType("video/mp4"))
-                        .contentLength(contentLength)
-                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
-                        .header(HttpHeaders.CONTENT_RANGE,
-                                String.format("bytes %d-%d/%d", start, end, fileSize))
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                        .body(resource);
+            if (start > end || start >= fileSize) {
+                return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                        .header(HttpHeaders.CONTENT_RANGE, "bytes */" + fileSize)
+                        .build();
             }
 
+            long contentLength = end - start + 1;
+
+            log.debug("Range 처리 - start: {}, end: {}, length: {}, total: {}",
+                    start, end, contentLength, fileSize);
+
+            // InputStream을 사용한 Range 처리 (메모리 효율적)
+            InputStream inputStream = new FileInputStream(file);
+            inputStream.skip(start);
+
+            // 지정된 범위만큼만 읽을 수 있는 제한된 InputStream
+            InputStream limitedStream = new InputStream() {
+                private long remaining = contentLength;
+
+                @Override
+                public int read() throws IOException {
+                    if (remaining <= 0) {
+                        return -1;
+                    }
+                    int result = inputStream.read();
+                    if (result != -1) {
+                        remaining--;
+                    }
+                    return result;
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) throws IOException {
+                    if (remaining <= 0) {
+                        return -1;
+                    }
+                    int toRead = (int) Math.min(len, remaining);
+                    int result = inputStream.read(b, off, toRead);
+                    if (result > 0) {
+                        remaining -= result;
+                    }
+                    return result;
+                }
+
+                @Override
+                public void close() throws IOException {
+                    inputStream.close();
+                }
+            };
+
+            Resource resource = new InputStreamResource(limitedStream);
+
+            return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                    .contentType(MediaType.parseMediaType("video/mp4"))
+                    .contentLength(contentLength)
+                    .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                    .header(HttpHeaders.CONTENT_RANGE,
+                            String.format("bytes %d-%d/%d", start, end, fileSize))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                    .body(resource);
+
         } catch (Exception e) {
-            log.error("비디오 파일 제공 중 오류 발생", e);
+            log.error("비디오 파일 제공 중 오류", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    @GetMapping("/progress/{analysisId}")
+    public Mono<ResponseEntity<VideoProgressResponse>> getAnalysisProgress(
+            @PathVariable Long analysisId) {
+
+        log.debug("진행률 조회 요청 - ID: {}", analysisId);
+
+        return videoAnalysisService.getAnalysisProgress(analysisId)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build())
+                .onErrorResume(e -> {
+                    log.error("진행률 조회 실패 - ID: {}", analysisId, e);
+                    return Mono.just(ResponseEntity.internalServerError().build());
+                });
     }
 }
