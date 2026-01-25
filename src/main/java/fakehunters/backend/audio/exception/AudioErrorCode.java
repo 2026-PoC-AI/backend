@@ -33,7 +33,10 @@ public enum AudioErrorCode implements ErrorCode {
 
     // AI 서버 연동 관련
     AI_SERVER_ERROR("AUDIO013", "AI 서버 연결에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE),
-    FILE_READ_ERROR("AUDIO014", "파일 읽기에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+    FILE_READ_ERROR("AUDIO014", "파일 읽기에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR),
+
+    // S3 다운로드 관련
+    DOWNLOAD_ERROR("AUDIO015", "오디오 파일 다운로드에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final String code;
     private final String message;

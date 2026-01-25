@@ -1,17 +1,24 @@
 package fakehunters.backend.audio.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fakehunters.backend.audio.domain.AudioFile;
 import fakehunters.backend.audio.dto.response.AudioFileInfoResponse;
 import fakehunters.backend.audio.exception.AudioErrorCode;
-import fakehunters.backend.audio.mapper.AudioFileMapper;
 import fakehunters.backend.audio.mapper.AudioAnalysisResultMapper;
+import fakehunters.backend.audio.mapper.AudioFileMapper;
 import fakehunters.backend.global.exception.custom.CustomBusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -25,50 +32,58 @@ public class AudioFileService {
     private final AudioAnalysisResultMapper audioAnalysisResultMapper;
     private final AudioStorageService audioStorageService;
 
+    @Value("${aws.s3.bucket}")
+    private String bucketName;
+
+    /**
+     * Presigned 방식 업로드 후 DB 등록
+     * (S3 → 메타데이터 추출 → INSERT)
+     */
     @Transactional
-    public Long uploadAudioFile(MultipartFile file) {
-        validateAudioFile(file);
+    public Long uploadAudioFile(
+            String s3Key,
+            String fileName,
+            Long fileSize
+    ) {
+        if (s3Key == null || s3Key.isBlank()) {
+            throw new CustomBusinessException(AudioErrorCode.FILE_REQUIRED);
+        }
 
+        String s3Path = "s3://" + bucketName + "/" + s3Key;
+
+        Path tempFile = null;
         try {
-            log.info("=== 파일 업로드 시작: {} ===", file.getOriginalFilename());
+            // 1. S3 → temp file
+            tempFile = audioStorageService.downloadToTempFile(s3Path);
 
-            String filePath = audioStorageService.uploadFile(file);
-            log.info("1. S3 업로드 완료: {}", filePath);
+            // 2. 메타데이터 추출
+            AudioMetadata meta = AudioMetadataExtractor.extract(tempFile);
 
-            AudioStorageService.AudioMetadata metadata = audioStorageService.extractMetadata(file);
-            log.info("2. 메타데이터 추출 완료: duration={}, sampleRate={}",
-                    metadata.getDuration(), metadata.getSampleRate());
-
+            // 3. DB INSERT (NOT NULL 컬럼 모두 채움)
             AudioFile audioFile = AudioFile.builder()
-                    .fileName(file.getOriginalFilename())
-                    .filePath(filePath)
-                    .fileSize(file.getSize())
-                    .duration(metadata.getDuration())
-                    .sampleRate(metadata.getSampleRate())
+                    .fileName(fileName)
+                    .filePath(s3Path)
+                    .fileSize(fileSize)
+                    .duration(BigDecimal.valueOf(meta.duration))
+                    .sampleRate(meta.sampleRate)
+                    .status("pending")
                     .build();
 
-            log.info("3. AudioFile 객체 생성 완료");
-
             audioFileMapper.insert(audioFile);
-            log.info("4. DB INSERT 완료");
+            return audioFile.getId();
 
-            Long generatedId = audioFile.getId();
-            log.info("5. 생성된 ID: {}", generatedId);
-
-            if (generatedId == null) {
-                log.error("생성된 ID가 null입니다!");
-                throw new CustomBusinessException(AudioErrorCode.UPLOAD_ERROR);
-            }
-
-            log.info("=== 파일 업로드 성공: audioFileId={} ===", generatedId);
-            return generatedId;
-
-        } catch (CustomBusinessException e) {
-            log.error("CustomBusinessException 발생: {}", e.getMessage(), e);
-            throw e;
         } catch (Exception e) {
-            log.error("예상치 못한 에러 발생", e);
+            log.error("Audio upload failed", e);
             throw new CustomBusinessException(AudioErrorCode.UPLOAD_ERROR);
+        } finally {
+            // 4. temp file 정리
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (Exception e) {
+                    log.warn("Failed to delete temp audio file", e);
+                }
+            }
         }
     }
 
@@ -76,7 +91,8 @@ public class AudioFileService {
         AudioFile audioFile = audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
-        boolean hasAnalysis = audioAnalysisResultMapper.existsByAudioFileId(audioFileId);
+        boolean hasAnalysis =
+                audioAnalysisResultMapper.existsByAudioFileId(audioFileId);
 
         return AudioFileInfoResponse.builder()
                 .id(audioFile.getId())
@@ -91,22 +107,20 @@ public class AudioFileService {
     }
 
     public List<AudioFileInfoResponse> getAllAudioFiles() {
-        List<AudioFile> audioFiles = audioFileMapper.findAllOrderByCreatedAtDesc();
-
-        return audioFiles.stream()
-                .map(audioFile -> {
-                    boolean hasAnalysis = audioAnalysisResultMapper.existsByAudioFileId(audioFile.getId());
-                    return AudioFileInfoResponse.builder()
-                            .id(audioFile.getId())
-                            .fileName(audioFile.getFileName())
-                            .fileSize(audioFile.getFileSize())
-                            .duration(audioFile.getDuration())
-                            .sampleRate(audioFile.getSampleRate())
-                            .status(audioFile.getStatus())
-                            .uploadedAt(audioFile.getUploadedAt())
-                            .hasAnalysis(hasAnalysis)
-                            .build();
-                })
+        return audioFileMapper.findAllOrderByCreatedAtDesc()
+                .stream()
+                .map(file -> AudioFileInfoResponse.builder()
+                        .id(file.getId())
+                        .fileName(file.getFileName())
+                        .fileSize(file.getFileSize())
+                        .duration(file.getDuration())
+                        .sampleRate(file.getSampleRate())
+                        .status(file.getStatus())
+                        .uploadedAt(file.getUploadedAt())
+                        .hasAnalysis(
+                                audioAnalysisResultMapper.existsByAudioFileId(file.getId())
+                        )
+                        .build())
                 .collect(Collectors.toList());
     }
 
@@ -120,27 +134,52 @@ public class AudioFileService {
         AudioFile audioFile = audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
-        try {
-            audioStorageService.deleteFile(audioFile.getFilePath());
-            audioFileMapper.deleteById(audioFileId);
-        } catch (Exception e) {
-            throw new CustomBusinessException(AudioErrorCode.DELETE_ERROR);
+        audioStorageService.deleteFile(audioFile.getFilePath());
+        audioFileMapper.deleteById(audioFileId);
+    }
+
+    private static class AudioMetadataExtractor {
+
+        static AudioMetadata extract(Path audioPath) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(
+                        "ffprobe",
+                        "-v", "error",
+                        "-select_streams", "a:0",
+                        "-show_entries", "format=duration",
+                        "-show_entries", "stream=sample_rate",
+                        "-of", "json",
+                        audioPath.toAbsolutePath().toString()
+                );
+
+                Process process = pb.start();
+
+                String json;
+                try (BufferedReader reader =
+                             new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    json = reader.lines().collect(Collectors.joining());
+                }
+
+                ObjectMapper mapper = new ObjectMapper();
+                JsonNode root = mapper.readTree(json);
+
+                double duration =
+                        root.path("format").path("duration").asDouble(-1);
+
+                int sampleRate =
+                        root.path("streams").get(0).path("sample_rate").asInt(-1);
+
+                if (duration <= 0 || sampleRate <= 0) {
+                    throw new IllegalStateException("Invalid audio metadata: " + json);
+                }
+
+                return new AudioMetadata(duration, sampleRate);
+
+            } catch (Exception e) {
+                throw new IllegalStateException("Audio metadata extraction failed", e);
+            }
         }
     }
 
-    private void validateAudioFile(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new CustomBusinessException(AudioErrorCode.FILE_REQUIRED);
-        }
-
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("audio/")) {
-            throw new CustomBusinessException(AudioErrorCode.INVALID_FILE_FORMAT);
-        }
-
-        long maxSize = 50 * 1024 * 1024; // 50MB
-        if (file.getSize() > maxSize) {
-            throw new CustomBusinessException(AudioErrorCode.FILE_SIZE_EXCEEDED);
-        }
-    }
+    private record AudioMetadata(double duration, int sampleRate) {}
 }

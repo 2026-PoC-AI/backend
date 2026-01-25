@@ -32,6 +32,7 @@ public class AudioAnalysisService {
     private final AudioSpectrogramHeatmapMapper audioSpectrogramHeatmapMapper;
     private final AudioFileService audioFileService;
     private final AudioFastApiClient fastApiClient;
+    private final AudioStorageService audioStorageService;
 
     @Transactional
     public Long analyzeAudio(Long audioFileId) {
@@ -115,18 +116,24 @@ public class AudioAnalysisService {
         audioFileMapper.findById(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
+        AudioFile audioFile = audioFileMapper.findById(audioFileId)
+                .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
+
         AudioAnalysisResult result = audioAnalysisResultMapper.findByAudioFileId(audioFileId)
                 .orElseThrow(() -> new CustomBusinessException(AudioErrorCode.NOT_FOUND));
 
         Long analysisResultId = result.getId();
 
+        String presignedUrl = audioStorageService.generatePresignedGetUrl(audioFile.getFilePath());
         List<AudioModelPrediction> predictions = audioModelPredictionMapper.findByAnalysisResultId(analysisResultId);
         List<AudioTimeSegmentAnalysis> segments = audioTimeSegmentAnalysisMapper.findByAnalysisResultIdOrderByStartTimeAsc(analysisResultId);
         List<AudioDetectionIndicator> indicators = audioDetectionIndicatorMapper.findByAnalysisResultId(analysisResultId);
         List<AudioSpectrogramHeatmap> heatmaps = audioSpectrogramHeatmapMapper.findByAnalysisResultId(analysisResultId);
 
         return AudioAnalysisResponse.builder()
+                .status("completed")
                 .audioFileId(audioFileId)
+                .audioUrl(presignedUrl)
                 .prediction(result.getPrediction())
                 .confidence(result.getConfidence())
                 .realProbability(result.getRealProbability())

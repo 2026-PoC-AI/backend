@@ -8,8 +8,9 @@ import java.util.List;
 @Getter
 @Builder
 public class AudioAnalysisResponse {
-
+    private String status;
     private Long audioFileId;
+    private String audioUrl;
     private String prediction;
     private BigDecimal confidence;
     private BigDecimal realProbability;

@@ -1,6 +1,7 @@
 package fakehunters.backend.text.dto.external;
 
 public record AiAnalyzeRequest(
-        String analysisId,
-        String inputText
+        String text,
+        int evidence_k,
+        boolean include_references
 ) {}
