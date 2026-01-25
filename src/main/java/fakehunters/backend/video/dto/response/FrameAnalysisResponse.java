@@ -9,9 +9,9 @@ import java.math.BigDecimal;
 public class FrameAnalysisResponse {
     private Long frameId;
     private Integer frameNumber;
-    private BigDecimal timestampSeconds;
+    private Double timestampSeconds;
     private Boolean isDeepfake;
-    private BigDecimal confidenceScore;
+    private Double confidenceScore;
     private String anomalyType;
     private String features;
 }

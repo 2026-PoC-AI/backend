@@ -3,7 +3,6 @@ package fakehunters.backend.video.dto.response;
 import lombok.Builder;
 import lombok.Data;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Data
@@ -12,7 +11,7 @@ public class AnalysisResultResponse {
     private Long resultId;
     private Long analysisId;
     private OffsetDateTime createdAt;
-    private BigDecimal confidenceScore;
+    private Double confidenceScore;
     private Boolean isDeepfake;
     private String modelVersion;
     private Long processingTimeMs;

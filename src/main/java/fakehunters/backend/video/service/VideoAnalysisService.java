@@ -6,6 +6,8 @@ import fakehunters.backend.video.domain.*;
 import fakehunters.backend.video.dto.response.*;
 import fakehunters.backend.video.exception.VideoErrorCode;
 import fakehunters.backend.video.mapper.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -28,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -68,12 +72,27 @@ public class VideoAnalysisService {
         videoAnalysisMapper.insert(videoAnalysis);
         Long analysisId = videoAnalysis.getAnalysisId();
 
-        // 원본 파일만 먼저 저장 (FFmpeg 변환은 나중에)
         String storedFilename;
+        String webFilename = null;
+        Double videoDuration = null;  // duration 저장
+
         try {
             storedFilename = saveFile(file, analysisId.toString());
+            String originalPath = uploadPath + "/" + storedFilename;
+
+            log.info("FFmpeg 변환 시작 - ID: {}", analysisId);
+            VideoConversionResult conversionResult = convertToWebFormat(originalPath, analysisId.toString());
+
+            if (conversionResult != null) {
+                webFilename = conversionResult.getFilename();
+                videoDuration = conversionResult.getDuration();  // duration 가져오기
+            }
+
+            log.info("FFmpeg 변환 완료 - ID: {}, webFilename: {}, duration: {}초",
+                    analysisId, webFilename, videoDuration);
+
         } catch (IOException e) {
-            log.error("파일 저장 실패", e);
+            log.error("파일 처리 실패", e);
             throw new CustomSystemException(VideoErrorCode.UPLOAD_ERROR);
         }
 
@@ -82,8 +101,9 @@ public class VideoAnalysisService {
                 .originalFilename(file.getOriginalFilename())
                 .storedFilename(storedFilename)
                 .filePath(uploadPath + "/" + storedFilename)
-                .webFilePath(uploadPath + "/" + storedFilename) // 일단 원본 경로
+                .webFilePath(webFilename != null ? uploadPath + "/" + webFilename : uploadPath + "/" + storedFilename)
                 .fileSize(file.getSize())
+                .durationSeconds(videoDuration)  // duration 설정
                 .format(getFileExtension(file.getOriginalFilename()))
                 .uploadedAt(OffsetDateTime.now())
                 .build();
@@ -91,11 +111,10 @@ public class VideoAnalysisService {
 
         videoAnalysisMapper.updateStatus(analysisId, "PROCESSING");
 
-        // Redis 초기 상태
         VideoProgressResponse initialProgress = VideoProgressResponse.builder()
                 .progress(0)
-                .stage("video_upload")
-                .detail("분석을 준비 중입니다.")
+                .stage("ai_analysis")
+                .detail("AI 분석을 시작합니다.")
                 .build();
 
         String json;
@@ -112,8 +131,7 @@ public class VideoAnalysisService {
                 .set(key, json, java.time.Duration.ofHours(1))
                 .doOnSuccess(result -> {
                     log.info("Redis 초기 상태 저장 완료 - Key: {}", key);
-                    // FFmpeg 변환과 AI 분석을 백그라운드에서 실행
-                    processVideoWithConversionAsync(file, analysisId, storedFilename);
+                    processAIAnalysisAsync(analysisId, storedFilename);
                 })
                 .doOnError(e -> log.error("Redis 초기 상태 저장 실패 - Key: {}", key, e))
                 .thenReturn(VideoAnalysisResponse.builder()
@@ -126,36 +144,10 @@ public class VideoAnalysisService {
     }
 
     @Async
-    public void processVideoWithConversionAsync(MultipartFile file, Long analysisId, String storedFilename) {
-        log.info("백그라운드 처리 시작 - ID: {}, FFmpeg 변환 포함", analysisId);
+    public void processAIAnalysisAsync(Long analysisId, String storedFilename) {
+        log.info("AI 분석 백그라운드 시작 - ID: {}", analysisId);
 
         try {
-            // FFmpeg 변환 (백그라운드에서)
-            String originalPath = uploadPath + "/" + storedFilename;
-            String webFilename = convertToWebFormat(originalPath, analysisId.toString());
-
-            // VideoFile 업데이트 (web 파일 경로)
-            if (webFilename != null) {
-                String webFilePath = uploadPath + "/" + webFilename;
-                videoFileMapper.updateWebFilePath(analysisId, webFilePath);
-                log.info("Web 파일 경로 업데이트 완료 - ID: {}, Path: {}", analysisId, webFilePath);
-            }
-
-            // AI 분석 시작
-            processVideoAnalysisAsync(analysisId, storedFilename);
-
-        } catch (Exception e) {
-            log.error("백그라운드 처리 실패 - ID: {}", analysisId, e);
-            videoAnalysisMapper.updateStatus(analysisId, "FAILED");
-        }
-    }
-
-    @Async
-    public void processVideoAnalysisAsync(Long analysisId, String storedFilename) {
-        log.info("AI 분석 시작 - ID: {}", analysisId);
-
-        try {
-            // 저장된 파일을 다시 읽기
             Path filePath = Paths.get(uploadPath, storedFilename);
             byte[] fileBytes = Files.readAllBytes(filePath);
 
@@ -178,15 +170,61 @@ public class VideoAnalysisService {
                         saveAnalysisResultInternal(analysisId, response);
                         videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
                         videoAnalysisMapper.updateCompletedAt(analysisId);
+                        updateProgressToCompleted(analysisId);
                     })
                     .doOnError(e -> {
                         log.error("AI 서비스 호출 실패 - ID: {}", analysisId, e);
                         videoAnalysisMapper.updateStatus(analysisId, "FAILED");
+                        updateProgressToFailed(analysisId);
                     })
                     .subscribe();
         } catch (Exception e) {
             log.error("백그라운드 분석 실패 - ID: {}", analysisId, e);
             videoAnalysisMapper.updateStatus(analysisId, "FAILED");
+            updateProgressToFailed(analysisId);
+        }
+    }
+
+    @Getter
+    @AllArgsConstructor
+    private static class VideoConversionResult {
+        private String filename;
+        private Double duration;
+    }
+
+    private void updateProgressToCompleted(Long analysisId) {
+        VideoProgressResponse progress = VideoProgressResponse.builder()
+                .progress(100)
+                .stage("completed")
+                .detail("분석이 완료되었습니다.")
+                .build();
+
+        try {
+            String json = objectMapper.writeValueAsString(progress);
+            String key = "video_analysis_progress:" + analysisId;
+            redisTemplate.opsForValue()
+                    .set(key, json, java.time.Duration.ofHours(1))
+                    .subscribe();
+        } catch (Exception e) {
+            log.error("Redis 완료 상태 업데이트 실패", e);
+        }
+    }
+
+    private void updateProgressToFailed(Long analysisId) {
+        VideoProgressResponse progress = VideoProgressResponse.builder()
+                .progress(0)
+                .stage("failed")
+                .detail("분석에 실패했습니다.")
+                .build();
+
+        try {
+            String json = objectMapper.writeValueAsString(progress);
+            String key = "video_analysis_progress:" + analysisId;
+            redisTemplate.opsForValue()
+                    .set(key, json, java.time.Duration.ofHours(1))
+                    .subscribe();
+        } catch (Exception e) {
+            log.error("Redis 실패 상태 업데이트 실패", e);
         }
     }
 
@@ -227,26 +265,26 @@ public class VideoAnalysisService {
     public Mono<VideoProgressResponse> getAnalysisProgress(Long analysisId) {
         String key = "video_analysis_progress:" + analysisId;
 
-        log.info("🔍 Redis 조회 - Key: {}", key);
+        log.info("Redis 조회 - Key: {}", key);
 
         return redisTemplate.opsForValue()
                 .get(key)
                 .doOnNext(json -> {
-                    log.info("✅ Redis 원본 데이터: {}", json);
+                    log.info("Redis 원본 데이터: {}", json);
                 })
                 .map(json -> {
                     try {
                         VideoProgressResponse response = objectMapper.readValue(json, VideoProgressResponse.class);
-                        log.info("✅ 파싱 성공: progress={}, stage={}",
-                                response.getProgress(), response.getProgress());
+                        log.info("파싱 성공: progress={}, stage={}",
+                                response.getProgress(), response.getStage());
                         return response;
                     } catch (Exception e) {
-                        log.error("❌ JSON 파싱 실패: {}", json, e);
+                        log.error("JSON 파싱 실패: {}", json, e);
                         return null;
                     }
                 })
                 .switchIfEmpty(Mono.defer(() -> {
-                    log.warn("⚠️ Redis에 데이터 없음 - Key: {}", key);
+                    log.warn("Redis에 데이터 없음 - Key: {}", key);
                     return Mono.empty();
                 }));
     }
@@ -272,9 +310,13 @@ public class VideoAnalysisService {
                         .map(frame -> FrameAnalysis.builder()
                                 .resultId(resultId)
                                 .frameNumber(frame.getFrameNumber())
-                                .timestampSeconds(frame.getTimestampSeconds())
+                                .timestampSeconds(frame.getTimestampSeconds() != null
+                                        ? frame.getTimestampSeconds().doubleValue()
+                                        : null)
                                 .isDeepfake(frame.getIsDeepfake())
-                                .confidenceScore(frame.getConfidenceScore())
+                                .confidenceScore(frame.getConfidenceScore() != null
+                                        ? frame.getConfidenceScore().doubleValue()
+                                        : null)
                                 .anomalyRegions(convertToJsonString(frame.getAnomalyType()))
                                 .features(convertToJsonString(frame.getFeatures()))
                                 .build())
@@ -287,55 +329,150 @@ public class VideoAnalysisService {
         }
     }
 
-    private String convertToWebFormat(String originalPath, String analysisId) throws IOException {
+    private VideoConversionResult convertToWebFormat(String originalPath, String analysisId) throws IOException {
         Path uploadDir = Paths.get(uploadPath);
         String webFilename = analysisId + "_web_" + System.currentTimeMillis() + ".mp4";
         String webPath = uploadDir.resolve(webFilename).toString();
 
         try {
-            List<String> command = Arrays.asList(
+            List<String> command = new ArrayList<>(Arrays.asList(
                     ffmpegPath,
                     "-i", originalPath,
                     "-c:v", "libx264",
-                    "-preset", "ultrafast",
+                    "-preset", "medium",
+                    "-profile:v", "baseline",
+                    "-level", "3.0",
+                    "-pix_fmt", "yuv420p",
                     "-c:a", "aac",
+                    "-b:a", "128k",
                     "-movflags", "+faststart",
                     "-y",
                     webPath
-            );
+            ));
 
-            log.info("=== FFmpeg 변환 시작 ===");
-            log.info("명령어: {}", String.join(" ", command));
-            log.info("원본 파일: {}", originalPath);
-            log.info("출력 파일: {}", webPath);
+            log.info("FFmpeg 변환 명령: {}", String.join(" ", command));
 
             ProcessBuilder processBuilder = new ProcessBuilder(command);
             processBuilder.redirectErrorStream(true);
-
             Process process = processBuilder.start();
+
+            Double duration = null;
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    log.debug("[FFmpeg] {}", line); // info -> debug로 변경 (로그 줄이기)
+                    // Duration 추출
+                    if (line.contains("Duration:")) {
+                        String durationStr = line.split("Duration:")[1].split(",")[0].trim();
+                        String[] parts = durationStr.split(":");
+                        if (parts.length == 3) {
+                            int hours = Integer.parseInt(parts[0]);
+                            int minutes = Integer.parseInt(parts[1]);
+                            double seconds = Double.parseDouble(parts[2]);
+                            duration = hours * 3600 + minutes * 60 + seconds;
+                        }
+                    }
+
+                    if (line.contains("Duration:") || line.contains("time=")) {
+                        log.info("[FFmpeg] {}", line);
+                    }
                 }
             }
 
             int exitCode = process.waitFor();
-            log.info("FFmpeg 종료 코드: {}", exitCode);
-
             if (exitCode != 0) {
-                log.warn("ffmpeg 변환 실패 (exit code: {}), 원본 파일 사용", exitCode);
+                log.error("FFmpeg 변환 실패 (exit code: {})", exitCode);
                 return null;
             }
 
-            log.info("ffmpeg 변환 성공: {}", webFilename);
-            return webFilename;
+            File webFile = new File(webPath);
+            if (!webFile.exists() || webFile.length() == 0) {
+                log.error("변환 파일 생성 실패");
+                return null;
+            }
+
+            log.info("FFmpeg 변환 성공: {}, 크기: {} bytes, 길이: {}초",
+                    webFilename, webFile.length(), duration);
+
+            return new VideoConversionResult(webFilename, duration);
+
         } catch (Exception e) {
-            log.error("ffmpeg 변환 중 예외 발생", e);
+            log.error("FFmpeg 변환 예외", e);
             return null;
         }
+    }
+
+    // 우선은 사용하지 않고 테스트
+    private VideoInfo getVideoInfo(String filePath) {
+        VideoInfo info = new VideoInfo();
+        try {
+            String ffprobePath = ffmpegPath.replace("ffmpeg.exe", "ffprobe.exe")
+                    .replace("ffmpeg", "ffprobe");
+
+            List<String> command = Arrays.asList(
+                    ffprobePath,
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries",
+                    "stream=r_frame_rate,duration:format=duration",
+                    "-of", "json",
+                    filePath
+            );
+
+            ProcessBuilder pb = new ProcessBuilder(command);
+            Process p = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+
+            p.waitFor();
+
+            String json = output.toString();
+            if (json.contains("\"duration\"")) {
+                String durStr = json.split("\"duration\":\"")[1].split("\"")[0];
+                info.duration = Double.parseDouble(durStr);
+            }
+            if (json.contains("\"r_frame_rate\"")) {
+                String fpsStr = json.split("\"r_frame_rate\":\"")[1].split("\"")[0];
+                String[] parts = fpsStr.split("/");
+                if (parts.length == 2) {
+                    info.fps = Double.parseDouble(parts[0]) / Double.parseDouble(parts[1]);
+                }
+            }
+
+            List<String> audioCmd = Arrays.asList(
+                    ffprobePath,
+                    "-v", "error",
+                    "-select_streams", "a",
+                    "-show_entries", "stream=codec_type",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    filePath
+            );
+            pb = new ProcessBuilder(audioCmd);
+            p = pb.start();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                info.hasAudio = reader.readLine() != null;
+            }
+            p.waitFor();
+
+        } catch (Exception e) {
+            log.warn("비디오 정보 조회 실패: {}", filePath, e);
+        }
+        return info;
+    }
+
+    private static class VideoInfo {
+        Double duration;
+        Double fps;
+        boolean hasAudio = false;
     }
 
     private String convertToJsonString(String value) {

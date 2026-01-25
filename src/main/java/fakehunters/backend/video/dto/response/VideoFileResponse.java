@@ -17,7 +17,7 @@ public class VideoFileResponse {
     private String storedFilename;
     private String filePath;
     private Long fileSize;
-    private BigDecimal durationSeconds;
+    private Double durationSeconds;
     private String resolution;
     private String format;
     private BigDecimal fps;
