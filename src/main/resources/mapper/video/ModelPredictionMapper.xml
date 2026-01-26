@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.video.mapper.ModelPredictionMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="predictionId">
+        INSERT INTO video_model_prediction (
+        result_id,
+        model_name,
+        prediction,
+        confidence,
+        fake_probability,
+        detected_patterns,
+        suspicious_frames,
+        attention_weights
+        ) VALUES (
+        #{resultId},
+        #{modelName},
+        #{prediction},
+        #{confidence},
+        #{fakeProbability},
+        #{detectedPatterns}::jsonb,
+        #{suspiciousFrames}::jsonb,
+        #{attentionWeights}::jsonb
+        )
+    </insert>
+
+    <select id="findByResultId" resultType="fakehunters.backend.video.domain.ModelPrediction">
+        SELECT
+        prediction_id as predictionId,
+        result_id as resultId,
+        model_name as modelName,
+        prediction,
+        confidence,
+        fake_probability as fakeProbability,
+        detected_patterns::text as detectedPatterns,
+        suspicious_frames::text as suspiciousFrames,
+        attention_weights::text as attentionWeights,
+        created_at as createdAt
+        FROM video_model_prediction
+        WHERE result_id = #{resultId}
+        ORDER BY
+        CASE model_name
+        WHEN 'xception' THEN 1
+        WHEN 'efficientnet' THEN 2
+        WHEN 'cnn_lstm' THEN 3
+        END
+    </select>
+
+    <delete id="deleteByResultId">
+        DELETE FROM video_model_prediction
+        WHERE result_id = #{resultId}
+    </delete>
+
+</mapper>

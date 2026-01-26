@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.video.mapper.DetectedArtifactMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="artifactId">
+        INSERT INTO video_detected_artifact (
+        result_id,
+        artifact_type,
+        detected,
+        sources,
+        patterns
+        ) VALUES (
+        #{resultId},
+        #{artifactType},
+        #{detected},
+        #{sources}::jsonb,
+        #{patterns}::jsonb
+        )
+    </insert>
+
+    <select id="findByResultId" resultType="fakehunters.backend.video.domain.DetectedArtifact">
+        SELECT
+        artifact_id as artifactId,
+        result_id as resultId,
+        artifact_type as artifactType,
+        detected,
+        sources::text as sources,
+        patterns::text as patterns
+        FROM video_detected_artifact
+        WHERE result_id = #{resultId}
+        ORDER BY
+        CASE artifact_type
+        WHEN 'spatial' THEN 1
+        WHEN 'temporal' THEN 2
+        WHEN 'structural' THEN 3
+        END
+    </select>
+
+    <delete id="deleteByResultId">
+        DELETE FROM video_detected_artifact
+        WHERE result_id = #{resultId}
+    </delete>
+
+</mapper>

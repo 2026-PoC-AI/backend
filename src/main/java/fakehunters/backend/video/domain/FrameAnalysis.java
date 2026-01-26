@@ -12,6 +12,6 @@ public class FrameAnalysis {
     private Double timestampSeconds;
     private Boolean isDeepfake;
     private Double confidenceScore;
-    private String anomalyRegions;
+    private String anomalyType;      // anomalyRegions에서 변경
     private String features;
 }

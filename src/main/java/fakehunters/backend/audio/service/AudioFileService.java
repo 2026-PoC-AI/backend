@@ -35,6 +35,13 @@ public class AudioFileService {
     @Value("${aws.s3.bucket}")
     private String bucketName;
 
+    @Value("${ffmpeg.ffprobe-path}")
+    private String ffprobePath;
+
+    /**
+     * Presigned 방식 업로드 후 DB 등록
+     * (S3 → 메타데이터 추출 → INSERT)
+     */
     /**
      * Presigned 방식 업로드 후 DB 등록
      * (S3 → 메타데이터 추출 → INSERT)
@@ -57,7 +64,7 @@ public class AudioFileService {
             tempFile = audioStorageService.downloadToTempFile(s3Path);
 
             // 2. 메타데이터 추출
-            AudioMetadata meta = AudioMetadataExtractor.extract(tempFile);
+            AudioMetadata meta = extractMetadata(tempFile);
 
             // 3. DB INSERT (NOT NULL 컬럼 모두 채움)
             AudioFile audioFile = AudioFile.builder()
@@ -138,46 +145,43 @@ public class AudioFileService {
         audioFileMapper.deleteById(audioFileId);
     }
 
-    private static class AudioMetadataExtractor {
+    private AudioMetadata extractMetadata(Path audioPath) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    ffprobePath,
+                    "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "format=duration",
+                    "-show_entries", "stream=sample_rate",
+                    "-of", "json",
+                    audioPath.toAbsolutePath().toString()
+            );
 
-        static AudioMetadata extract(Path audioPath) {
-            try {
-                ProcessBuilder pb = new ProcessBuilder(
-                        "ffprobe",
-                        "-v", "error",
-                        "-select_streams", "a:0",
-                        "-show_entries", "format=duration",
-                        "-show_entries", "stream=sample_rate",
-                        "-of", "json",
-                        audioPath.toAbsolutePath().toString()
-                );
+            Process process = pb.start();
 
-                Process process = pb.start();
-
-                String json;
-                try (BufferedReader reader =
-                             new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                    json = reader.lines().collect(Collectors.joining());
-                }
-
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode root = mapper.readTree(json);
-
-                double duration =
-                        root.path("format").path("duration").asDouble(-1);
-
-                int sampleRate =
-                        root.path("streams").get(0).path("sample_rate").asInt(-1);
-
-                if (duration <= 0 || sampleRate <= 0) {
-                    throw new IllegalStateException("Invalid audio metadata: " + json);
-                }
-
-                return new AudioMetadata(duration, sampleRate);
-
-            } catch (Exception e) {
-                throw new IllegalStateException("Audio metadata extraction failed", e);
+            String json;
+            try (BufferedReader reader =
+                         new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                json = reader.lines().collect(Collectors.joining());
             }
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(json);
+
+            double duration =
+                    root.path("format").path("duration").asDouble(-1);
+
+            int sampleRate =
+                    root.path("streams").get(0).path("sample_rate").asInt(-1);
+
+            if (duration <= 0 || sampleRate <= 0) {
+                throw new IllegalStateException("Invalid audio metadata: " + json);
+            }
+
+            return new AudioMetadata(duration, sampleRate);
+
+        } catch (Exception e) {
+            throw new IllegalStateException("Audio metadata extraction failed", e);
         }
     }
 
