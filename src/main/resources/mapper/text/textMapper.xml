@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="fakehunters.backend.text.mapper.TextMapper">
+
+    <!-- 부모 insert (UUID는 그대로 넣으면 Postgres가 UUID로 처리) -->
+    <insert id="insertTextAnalysis">
+        INSERT INTO text_analysis
+        (request_text, evidence_k, include_references, request_id, label, score)
+        VALUES
+        (#{requestText}, #{evidenceK}, #{includeReferences}, #{requestId}, #{label}, #{score})
+    </insert>
+
+    <!-- Postgres 시퀀스에서 방금 insert한 id 가져오기 -->
+    <select id="selectLastInsertId" resultType="long">
+        SELECT currval(pg_get_serial_sequence('text_analysis','id'))
+    </select>
+
+    <!-- evidences -->
+    <insert id="insertEvidence">
+        INSERT INTO text_analysis_evidence
+        (analysis_id, text, score, ord)
+        VALUES
+        (#{analysisId}, #{text}, #{score}, #{ord})
+    </insert>
+
+    <!-- highlights -->
+    <insert id="insertHighlight">
+        INSERT INTO text_analysis_highlight
+        (analysis_id, start_idx, end_idx, text, weight, ord)
+        VALUES
+        (#{analysisId}, #{startIdx}, #{endIdx}, #{text}, #{weight}, #{ord})
+    </insert>
+
+    <!-- references -->
+    <insert id="insertReference">
+        INSERT INTO text_analysis_reference
+        (analysis_id, title, url, snippet, ord)
+        VALUES
+        (#{analysisId}, #{title}, #{url}, #{snippet}, #{ord})
+    </insert>
+
+</mapper>
