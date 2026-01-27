@@ -11,28 +11,28 @@
         <result property="timestampSeconds" column="timestamp_seconds"/>
         <result property="isDeepfake" column="is_deepfake"/>
         <result property="confidenceScore" column="confidence_score"/>
-        <result property="anomalyRegions" column="anomaly_regions"/>
+        <result property="anomalyType" column="anomaly_type"/>
         <result property="features" column="features"/>
     </resultMap>
 
     <insert id="insert" parameterType="fakehunters.backend.video.domain.FrameAnalysis"
             useGeneratedKeys="true" keyProperty="frameId" keyColumn="frame_id">
         INSERT INTO video_analysis_frame (
-        result_id, frame_number, timestamp_seconds, is_deepfake, confidence_score, anomaly_regions, features
+        result_id, frame_number, timestamp_seconds, is_deepfake, confidence_score, anomaly_type, features
         ) VALUES (
         #{resultId},
         #{frameNumber},
         #{timestampSeconds},
         #{isDeepfake},
         #{confidenceScore},
-        #{anomalyRegions}::jsonb,
+        #{anomalyType},
         #{features}::jsonb
         )
     </insert>
 
     <insert id="insertBatch" parameterType="java.util.List">
         INSERT INTO video_analysis_frame (
-        result_id, frame_number, timestamp_seconds, is_deepfake, confidence_score, anomaly_regions, features
+        result_id, frame_number, timestamp_seconds, is_deepfake, confidence_score, anomaly_type, features
         ) VALUES
         <foreach collection="list" item="item" separator=",">
             (
@@ -41,7 +41,7 @@
             #{item.timestampSeconds},
             #{item.isDeepfake},
             #{item.confidenceScore},
-            #{item.anomalyRegions}::jsonb,
+            #{item.anomalyType},
             #{item.features}::jsonb
             )
         </foreach>

@@ -168,7 +168,15 @@ public class VideoAnalysisService {
                     .retrieve()
                     .bodyToMono(VideoAnalysisResponse.class)
                     .doOnNext(response -> {
+                        log.info("========================================");
                         log.info("AI 분석 완료 - ID: {}", analysisId);
+                        log.info("✅ FastAPI 응답 받음");
+                        log.info("  - analysisResult: {}", response.getAnalysisResult() != null ? "존재" : "null");
+                        log.info("  - frameAnalyses: {}", response.getFrameAnalyses() != null
+                                ? response.getFrameAnalyses().size() + "개"
+                                : "null");
+                        log.info("========================================");
+
                         saveAnalysisResultInternal(analysisId, response);
                         videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
                         videoAnalysisMapper.updateCompletedAt(analysisId);
@@ -309,7 +317,6 @@ public class VideoAnalysisService {
                     .detectedTechniques(response.getAnalysisResult().getDetectedTechniques())
                     .summary(response.getAnalysisResult().getSummary())
                     .analyzedAt(OffsetDateTime.now())
-                    // 앙상블 필드 추가
                     .ensembleFakeProbability(response.getAnalysisResult().getEnsembleFakeProbability())
                     .modelAgreement(response.getAnalysisResult().getModelAgreement())
                     .riskLevel(response.getAnalysisResult().getRiskLevel())
@@ -320,6 +327,16 @@ public class VideoAnalysisService {
 
             log.info("=== Received from FastAPI ===");
             log.info("Analysis Result: {}", response.getAnalysisResult());
+
+            // ✅ 프레임 분석 로그 추가
+            log.info("frameAnalyses is null: {}", response.getFrameAnalyses() == null);
+            if (response.getFrameAnalyses() != null) {
+                log.info("frameAnalyses size: {}", response.getFrameAnalyses().size());
+                log.info("frameAnalyses isEmpty: {}", response.getFrameAnalyses().isEmpty());
+                if (!response.getFrameAnalyses().isEmpty()) {
+                    log.info("First frame sample: {}", response.getFrameAnalyses().get(0));
+                }
+            }
 
             // 개별 모델 예측 저장
             if (response.getAnalysisResult().getIndividualModels() != null) {
@@ -333,6 +350,8 @@ public class VideoAnalysisService {
 
             // 프레임 분석 저장
             if (response.getFrameAnalyses() != null && !response.getFrameAnalyses().isEmpty()) {
+                log.info("✅ 프레임 분석 저장 시작 - 개수: {}", response.getFrameAnalyses().size());
+
                 List<FrameAnalysis> frameAnalyses = response.getFrameAnalyses().stream()
                         .map(frame -> FrameAnalysis.builder()
                                 .resultId(resultId)
@@ -344,15 +363,22 @@ public class VideoAnalysisService {
                                 .confidenceScore(frame.getConfidenceScore() != null
                                         ? frame.getConfidenceScore()
                                         : null)
-                                .anomalyType(frame.getAnomalyType())  // 수정됨
+                                .anomalyType(frame.getAnomalyType())
                                 .features(frame.getFeatures())
                                 .build())
                         .toList();
 
+                log.info("✅ 프레임 엔티티 변환 완료 - 개수: {}", frameAnalyses.size());
+
                 frameAnalysisMapper.insertBatch(frameAnalyses);
+
+                log.info("✅ 프레임 분석 DB 저장 완료");
+            } else {
+                log.warn("❌ 프레임 분석 데이터 없음!");
             }
         } catch (Exception e) {
             log.error("DB 결과 저장 실패", e);
+            e.printStackTrace();  // ✅ 스택 트레이스 출력
         }
     }
 
