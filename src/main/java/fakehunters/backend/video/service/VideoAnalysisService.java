@@ -46,6 +46,8 @@ public class VideoAnalysisService {
     private final AnalysisResultMapper analysisResultMapper;
     private final FrameAnalysisMapper frameAnalysisMapper;
     private final ReactiveRedisTemplate<String, String> redisTemplate;
+    private final ModelPredictionMapper modelPredictionMapper;
+    private final DetectedArtifactMapper detectedArtifactMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -166,7 +168,15 @@ public class VideoAnalysisService {
                     .retrieve()
                     .bodyToMono(VideoAnalysisResponse.class)
                     .doOnNext(response -> {
+                        log.info("========================================");
                         log.info("AI 분석 완료 - ID: {}", analysisId);
+                        log.info("✅ FastAPI 응답 받음");
+                        log.info("  - analysisResult: {}", response.getAnalysisResult() != null ? "존재" : "null");
+                        log.info("  - frameAnalyses: {}", response.getFrameAnalyses() != null
+                                ? response.getFrameAnalyses().size() + "개"
+                                : "null");
+                        log.info("========================================");
+
                         saveAnalysisResultInternal(analysisId, response);
                         videoAnalysisMapper.updateStatus(analysisId, "COMPLETED");
                         videoAnalysisMapper.updateCompletedAt(analysisId);
@@ -248,6 +258,13 @@ public class VideoAnalysisService {
                     .build());
         }
 
+        // 개별 모델 예측 조회
+        List<ModelPrediction> predictions = modelPredictionMapper.findByResultId(result.getResultId());
+
+        // 탐지된 아티팩트 조회
+        List<DetectedArtifact> artifacts = detectedArtifactMapper.findByResultId(result.getResultId());
+
+        // 프레임 분석 조회
         List<FrameAnalysis> frames = frameAnalysisMapper.findByResultId(result.getResultId());
 
         return Mono.just(VideoAnalysisResponse.builder()
@@ -257,7 +274,7 @@ public class VideoAnalysisService {
                 .createdAt(analysis.getCreatedAt())
                 .completedAt(analysis.getCompletedAt())
                 .videoFile(convertToFileResponse(file))
-                .analysisResult(convertToResultResponse(result))
+                .analysisResult(convertToResultResponse(result, predictions, artifacts))  // 수정됨
                 .frameAnalyses(frames.stream().map(this::convertToFrameResponse).toList())
                 .build());
     }
@@ -300,32 +317,177 @@ public class VideoAnalysisService {
                     .detectedTechniques(response.getAnalysisResult().getDetectedTechniques())
                     .summary(response.getAnalysisResult().getSummary())
                     .analyzedAt(OffsetDateTime.now())
+                    .ensembleFakeProbability(response.getAnalysisResult().getEnsembleFakeProbability())
+                    .modelAgreement(response.getAnalysisResult().getModelAgreement())
+                    .riskLevel(response.getAnalysisResult().getRiskLevel())
                     .build();
 
             analysisResultMapper.insert(result);
             Long resultId = result.getResultId();
 
+            log.info("=== Received from FastAPI ===");
+            log.info("Analysis Result: {}", response.getAnalysisResult());
+
+            // ✅ 프레임 분석 로그 추가
+            log.info("frameAnalyses is null: {}", response.getFrameAnalyses() == null);
+            if (response.getFrameAnalyses() != null) {
+                log.info("frameAnalyses size: {}", response.getFrameAnalyses().size());
+                log.info("frameAnalyses isEmpty: {}", response.getFrameAnalyses().isEmpty());
+                if (!response.getFrameAnalyses().isEmpty()) {
+                    log.info("First frame sample: {}", response.getFrameAnalyses().get(0));
+                }
+            }
+
+            // 개별 모델 예측 저장
+            if (response.getAnalysisResult().getIndividualModels() != null) {
+                saveModelPredictions(resultId, response.getAnalysisResult().getIndividualModels());
+            }
+
+            // 탐지된 아티팩트 저장
+            if (response.getAnalysisResult().getDetectedArtifacts() != null) {
+                saveDetectedArtifacts(resultId, response.getAnalysisResult().getDetectedArtifacts());
+            }
+
+            // 프레임 분석 저장
             if (response.getFrameAnalyses() != null && !response.getFrameAnalyses().isEmpty()) {
+                log.info("✅ 프레임 분석 저장 시작 - 개수: {}", response.getFrameAnalyses().size());
+
                 List<FrameAnalysis> frameAnalyses = response.getFrameAnalyses().stream()
                         .map(frame -> FrameAnalysis.builder()
                                 .resultId(resultId)
                                 .frameNumber(frame.getFrameNumber())
                                 .timestampSeconds(frame.getTimestampSeconds() != null
-                                        ? frame.getTimestampSeconds().doubleValue()
+                                        ? frame.getTimestampSeconds()
                                         : null)
                                 .isDeepfake(frame.getIsDeepfake())
                                 .confidenceScore(frame.getConfidenceScore() != null
-                                        ? frame.getConfidenceScore().doubleValue()
+                                        ? frame.getConfidenceScore()
                                         : null)
-                                .anomalyRegions(convertToJsonString(frame.getAnomalyType()))
-                                .features(convertToJsonString(frame.getFeatures()))
+                                .anomalyType(frame.getAnomalyType())
+                                .features(frame.getFeatures())
                                 .build())
                         .toList();
 
+                log.info("✅ 프레임 엔티티 변환 완료 - 개수: {}", frameAnalyses.size());
+
                 frameAnalysisMapper.insertBatch(frameAnalyses);
+
+                log.info("✅ 프레임 분석 DB 저장 완료");
+            } else {
+                log.warn("❌ 프레임 분석 데이터 없음!");
             }
         } catch (Exception e) {
             log.error("DB 결과 저장 실패", e);
+            e.printStackTrace();  // ✅ 스택 트레이스 출력
+        }
+    }
+
+    /**
+     * 개별 모델 예측 저장
+     */
+    private void saveModelPredictions(Long resultId,
+                                      AnalysisResultResponse.IndividualModelsResponse models) {
+        try {
+            // XceptionNet
+            if (models.getXception() != null) {
+                ModelPrediction xception = ModelPrediction.builder()
+                        .resultId(resultId)
+                        .modelName("xception")
+                        .prediction(models.getXception().getPrediction())
+                        .confidence(models.getXception().getConfidence())
+                        .fakeProbability(models.getXception().getFakeProbability())
+                        .detectedPatterns(objectMapper.writeValueAsString(
+                                models.getXception().getDetectedPatterns()))
+                        .build();
+                modelPredictionMapper.insert(xception);
+            }
+
+            // EfficientNet-B4
+            if (models.getEfficientnet() != null) {
+                ModelPrediction efficientnet = ModelPrediction.builder()
+                        .resultId(resultId)
+                        .modelName("efficientnet")
+                        .prediction(models.getEfficientnet().getPrediction())
+                        .confidence(models.getEfficientnet().getConfidence())
+                        .fakeProbability(models.getEfficientnet().getFakeProbability())
+                        .detectedPatterns(objectMapper.writeValueAsString(
+                                models.getEfficientnet().getDetectedPatterns()))
+                        .build();
+                modelPredictionMapper.insert(efficientnet);
+            }
+
+            // CNN-LSTM
+            if (models.getCnnLstm() != null) {
+                ModelPrediction cnnLstm = ModelPrediction.builder()
+                        .resultId(resultId)
+                        .modelName("cnn_lstm")
+                        .prediction(models.getCnnLstm().getPrediction())
+                        .confidence(models.getCnnLstm().getConfidence())
+                        .fakeProbability(models.getCnnLstm().getFakeProbability())
+                        .detectedPatterns(objectMapper.writeValueAsString(
+                                models.getCnnLstm().getDetectedPatterns()))
+                        .suspiciousFrames(models.getCnnLstm().getSuspiciousFrames() != null
+                                ? objectMapper.writeValueAsString(models.getCnnLstm().getSuspiciousFrames())
+                                : null)
+                        .build();
+                modelPredictionMapper.insert(cnnLstm);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to save model predictions", e);
+        }
+    }
+
+    /**
+     * 탐지된 아티팩트 저장
+     */
+    private void saveDetectedArtifacts(Long resultId,
+                                       AnalysisResultResponse.DetectedArtifactsResponse artifacts) {
+        try {
+            // Spatial
+            if (artifacts.getSpatial() != null) {
+                DetectedArtifact spatial = DetectedArtifact.builder()
+                        .resultId(resultId)
+                        .artifactType("spatial")
+                        .detected(artifacts.getSpatial().getDetected())
+                        .sources(objectMapper.writeValueAsString(
+                                artifacts.getSpatial().getSources()))
+                        .patterns(objectMapper.writeValueAsString(
+                                artifacts.getSpatial().getPatterns()))
+                        .build();
+                detectedArtifactMapper.insert(spatial);
+            }
+
+            // Temporal
+            if (artifacts.getTemporal() != null) {
+                DetectedArtifact temporal = DetectedArtifact.builder()
+                        .resultId(resultId)
+                        .artifactType("temporal")
+                        .detected(artifacts.getTemporal().getDetected())
+                        .sources(objectMapper.writeValueAsString(
+                                artifacts.getTemporal().getSources()))
+                        .patterns(objectMapper.writeValueAsString(
+                                artifacts.getTemporal().getPatterns()))
+                        .build();
+                detectedArtifactMapper.insert(temporal);
+            }
+
+            // Structural
+            if (artifacts.getStructural() != null) {
+                DetectedArtifact structural = DetectedArtifact.builder()
+                        .resultId(resultId)
+                        .artifactType("structural")
+                        .detected(artifacts.getStructural().getDetected())
+                        .sources(objectMapper.writeValueAsString(
+                                artifacts.getStructural().getSources()))
+                        .patterns(objectMapper.writeValueAsString(
+                                artifacts.getStructural().getPatterns()))
+                        .build();
+                detectedArtifactMapper.insert(structural);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to save detected artifacts", e);
         }
     }
 
@@ -527,8 +689,13 @@ public class VideoAnalysisService {
                 .build();
     }
 
-    private AnalysisResultResponse convertToResultResponse(AnalysisResult result) {
+    private AnalysisResultResponse convertToResultResponse(
+            AnalysisResult result,
+            List<ModelPrediction> predictions,
+            List<DetectedArtifact> artifacts) {
+
         if (result == null) return null;
+
         return AnalysisResultResponse.builder()
                 .resultId(result.getResultId())
                 .analysisId(result.getAnalysisId())
@@ -540,6 +707,14 @@ public class VideoAnalysisService {
                 .detectedTechniques(result.getDetectedTechniques())
                 .summary(result.getSummary())
                 .analyzedAt(result.getAnalyzedAt())
+                // 앙상블 정보 추가
+                .ensembleFakeProbability(result.getEnsembleFakeProbability())
+                .modelAgreement(result.getModelAgreement())
+                .riskLevel(result.getRiskLevel())
+                // 개별 모델 예측
+                .individualModels(convertToIndividualModelsResponse(predictions))
+                // 탐지된 아티팩트
+                .detectedArtifacts(convertToDetectedArtifactsResponse(artifacts))
                 .build();
     }
 
@@ -550,8 +725,123 @@ public class VideoAnalysisService {
                 .timestampSeconds(frame.getTimestampSeconds())
                 .isDeepfake(frame.getIsDeepfake())
                 .confidenceScore(frame.getConfidenceScore())
-                .anomalyType(frame.getAnomalyRegions())
+                .anomalyType(frame.getAnomalyType())
                 .features(frame.getFeatures())
                 .build();
+    }
+
+    /**
+     * 개별 모델 예측 리스트를 Response로 변환
+     */
+    private AnalysisResultResponse.IndividualModelsResponse convertToIndividualModelsResponse(
+            List<ModelPrediction> predictions) {
+
+        if (predictions == null || predictions.isEmpty()) {
+            return null;
+        }
+
+        AnalysisResultResponse.ModelPredictionResponse xception = null;
+        AnalysisResultResponse.ModelPredictionResponse efficientnet = null;
+        AnalysisResultResponse.ModelPredictionResponse cnnLstm = null;
+
+        for (ModelPrediction pred : predictions) {
+            try {
+                List<String> patterns = pred.getDetectedPatterns() != null
+                        ? objectMapper.readValue(pred.getDetectedPatterns(), List.class)
+                        : List.of();
+
+                List<Integer> suspiciousFrames = null;
+                if (pred.getSuspiciousFrames() != null) {
+                    suspiciousFrames = objectMapper.readValue(
+                            pred.getSuspiciousFrames(), List.class);
+                }
+
+                AnalysisResultResponse.ModelPredictionResponse modelResponse =
+                        AnalysisResultResponse.ModelPredictionResponse.builder()
+                                .modelName(getModelDisplayName(pred.getModelName()))
+                                .prediction(pred.getPrediction())
+                                .confidence(pred.getConfidence())
+                                .fakeProbability(pred.getFakeProbability())
+                                .detectedPatterns(patterns)
+                                .suspiciousFrames(suspiciousFrames)
+                                .build();
+
+                switch (pred.getModelName()) {
+                    case "xception" -> xception = modelResponse;
+                    case "efficientnet" -> efficientnet = modelResponse;
+                    case "cnn_lstm" -> cnnLstm = modelResponse;
+                }
+
+            } catch (Exception e) {
+                log.error("Failed to parse model prediction: {}", pred.getModelName(), e);
+            }
+        }
+
+        return AnalysisResultResponse.IndividualModelsResponse.builder()
+                .xception(xception)
+                .efficientnet(efficientnet)
+                .cnnLstm(cnnLstm)
+                .build();
+    }
+
+    /**
+     * 탐지된 아티팩트 리스트를 Response로 변환
+     */
+    private AnalysisResultResponse.DetectedArtifactsResponse convertToDetectedArtifactsResponse(
+            List<DetectedArtifact> artifacts) {
+
+        if (artifacts == null || artifacts.isEmpty()) {
+            return null;
+        }
+
+        AnalysisResultResponse.ArtifactCategoryResponse spatial = null;
+        AnalysisResultResponse.ArtifactCategoryResponse temporal = null;
+        AnalysisResultResponse.ArtifactCategoryResponse structural = null;
+
+        for (DetectedArtifact artifact : artifacts) {
+            try {
+                List<String> sources = artifact.getSources() != null
+                        ? objectMapper.readValue(artifact.getSources(), List.class)
+                        : List.of();
+
+                List<String> patterns = artifact.getPatterns() != null
+                        ? objectMapper.readValue(artifact.getPatterns(), List.class)
+                        : List.of();
+
+                AnalysisResultResponse.ArtifactCategoryResponse categoryResponse =
+                        AnalysisResultResponse.ArtifactCategoryResponse.builder()
+                                .detected(artifact.getDetected())
+                                .sources(sources)
+                                .patterns(patterns)
+                                .build();
+
+                switch (artifact.getArtifactType()) {
+                    case "spatial" -> spatial = categoryResponse;
+                    case "temporal" -> temporal = categoryResponse;
+                    case "structural" -> structural = categoryResponse;
+                }
+
+            } catch (Exception e) {
+                log.error("Failed to parse artifact: {}", artifact.getArtifactType(), e);
+            }
+        }
+
+        return AnalysisResultResponse.DetectedArtifactsResponse.builder()
+                .spatial(spatial)
+                .temporal(temporal)
+                .structural(structural)
+                .build();
+    }
+
+    /**
+     * 모델 이름을 표시용으로 변환
+     */
+    private String getModelDisplayName(String modelName) {
+        return switch (modelName) {
+            case "xception" -> "XceptionNet";
+            case "efficientnet" -> "EfficientNet-B4";
+            case "cnn_lstm" -> "CNN-LSTM";
+            default -> modelName;
+        };
     }
 }

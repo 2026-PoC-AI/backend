@@ -49,7 +49,7 @@ public class FrameAnalysisService {
                 .timestampSeconds(frame.getTimestampSeconds())
                 .isDeepfake(frame.getIsDeepfake())
                 .confidenceScore(frame.getConfidenceScore())
-                .anomalyType(frame.getAnomalyRegions())
+                .anomalyType(frame.getAnomalyType())
                 .features(frame.getFeatures())
                 .build();
     }

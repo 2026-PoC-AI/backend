@@ -14,6 +14,10 @@
         <result property="detectedTechniques" column="detected_techniques"/>
         <result property="summary" column="summary"/>
         <result property="analyzedAt" column="analyzed_at"/>
+        <!-- 앙상블 필드 추가 -->
+        <result property="ensembleFakeProbability" column="ensemble_fake_probability"/>
+        <result property="modelAgreement" column="model_agreement"/>
+        <result property="riskLevel" column="risk_level"/>
     </resultMap>
 
     <insert id="insert" parameterType="fakehunters.backend.video.domain.AnalysisResult"
@@ -26,7 +30,10 @@
         processing_time_ms,
         detected_techniques,
         summary,
-        analyzed_at
+        analyzed_at,
+        ensemble_fake_probability,
+        model_agreement,
+        risk_level
         ) VALUES (
         #{analysisId},
         #{isDeepfake},
@@ -42,7 +49,10 @@
             </otherwise>
         </choose>,
         #{summary},
-        #{analyzedAt}
+        #{analyzedAt},
+        #{ensembleFakeProbability},
+        #{modelAgreement},
+        #{riskLevel}
         )
     </insert>
 

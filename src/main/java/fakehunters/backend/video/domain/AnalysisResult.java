@@ -16,4 +16,9 @@ public class AnalysisResult {
     private String detectedTechniques; // MyBatis Handler를 통해 String 혹은 List로 처리
     private String summary;
     private OffsetDateTime analyzedAt;
+
+    // 앙상블 요약
+    private Double ensembleFakeProbability;
+    private Double modelAgreement;
+    private String riskLevel;
 }
