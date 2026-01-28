@@ -5,11 +5,13 @@ import fakehunters.backend.audio.dto.response.*;
 import fakehunters.backend.audio.service.AudioAnalysisService;
 import fakehunters.backend.audio.service.AudioFileService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/audio")
 @RequiredArgsConstructor
@@ -25,12 +27,19 @@ public class AudioController {
     public ResponseEntity<AudioUploadResponse> uploadAudio(
             @RequestBody AudioUploadRequest request
     ) {
+        log.info("=== Audio Upload Request ===");
+        log.info("S3 Key: {}", request.getS3Key());
+        log.info("File Name: {}", request.getFileName());
+        log.info("File Size: {}", request.getFileSize());
+
         Long audioFileId =
                 audioFileService.uploadAudioFile(
                         request.getS3Key(),
                         request.getFileName(),
                         request.getFileSize()
                 );
+
+        log.info("Audio File ID created: {}", audioFileId);
 
         return ResponseEntity.ok(
                 AudioUploadResponse.builder()
@@ -46,25 +55,44 @@ public class AudioController {
     public ResponseEntity<AudioAnalysisStartResponse> analyzeAudio(
             @PathVariable Long audioFileId
     ) {
-        Long analysisResultId = audioAnalysisService.analyzeAudio(audioFileId);
+        log.info("=== Audio Analysis Request ===");
+        log.info("Audio File ID: {}", audioFileId);
 
-        return ResponseEntity.ok(
-                AudioAnalysisStartResponse.builder()
-                        .success(true)
-                        .analysisResultId(analysisResultId)
-                        .status("processing")
-                        .message("분석 시작")
-                        .build()
-        );
+        try {
+            Long analysisResultId = audioAnalysisService.analyzeAudio(audioFileId);
+            log.info("Analysis Result ID created: {}", analysisResultId);
+
+            return ResponseEntity.ok(
+                    AudioAnalysisStartResponse.builder()
+                            .success(true)
+                            .analysisResultId(analysisResultId)
+                            .status("processing")
+                            .message("분석 시작")
+                            .build()
+            );
+        } catch (Exception e) {
+            log.error("Analysis failed for audioFileId: {}", audioFileId, e);
+            throw e;
+        }
     }
 
     @GetMapping("/{audioFileId}/result")
     public ResponseEntity<AudioAnalysisResponse> getAnalysisResult(
             @PathVariable Long audioFileId
     ) {
-        return ResponseEntity.ok(
-                audioAnalysisService.getAnalysisResult(audioFileId)
-        );
+        log.info("=== Get Analysis Result Request ===");
+        log.info("Audio File ID: {}", audioFileId);
+
+        try {
+            AudioAnalysisResponse response = audioAnalysisService.getAnalysisResult(audioFileId);
+            log.info("Analysis result prediction: {}", response.getPrediction());
+            log.info("Analysis result confidence: {}", response.getConfidence());
+            log.info("Full response: {}", response);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Failed to get analysis result for audioFileId: {}", audioFileId, e);
+            throw e;
+        }
     }
 
     @GetMapping("/{audioFileId}")
